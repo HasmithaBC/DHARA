@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCurrency } from "@/lib/currency-context";
+import { clearTokens, getRole } from "@/lib/admin-api";
+import { homeForRole } from "@/lib/admin-guard";
 
 const propertyLinks = [
   { href: "/properties/lands", label: "Land for Sale" },
@@ -30,6 +33,20 @@ export default function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const [mobileSection, setMobileSection] = useState<"properties" | "services" | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [dashboardUrl, setDashboardUrl] = useState("/admin/dashboard");
+
+  useEffect(() => {
+    // Check auth state when the dropdown is opened
+    if (profileOpen) {
+      const token = localStorage.getItem("dhara_access_token");
+      setIsLoggedIn(!!token);
+      if (token) {
+        setDashboardUrl(homeForRole(getRole()));
+      }
+    }
+  }, [profileOpen]);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -55,12 +72,9 @@ export default function Header() {
       <div className={`h-[2px] w-full bg-gradient-to-r from-brass via-brass-light to-brass transition-opacity duration-300 ${scrolled ? "opacity-100" : "opacity-0"}`} />
       <div className="container-content flex h-16 items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 font-display text-xl tracking-tight text-ink">
-          <span className="flex h-8 w-8 items-center justify-center bg-ink text-sm font-bold text-brass-light" style={{ clipPath: "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)" }}>
-            D
-          </span>
-          DHARA
-          <span className="ml-1 hidden text-xs font-body font-normal text-ink-soft sm:inline">
-            Construction &amp; Technology
+          <Image src="/images/home/logo.svg" alt="Dhara Logo" width={48} height={48} className="w-auto h-10 object-contain" />
+          <span className="ml-1 hidden text-xs font-body font-normal text-ink-soft sm:inline leading-tight uppercase tracking-widest">
+            Construction &amp;<br />Technology
           </span>
         </Link>
 
@@ -121,6 +135,45 @@ export default function Header() {
           >
             WhatsApp
           </a>
+
+          <div className="relative hidden sm:block">
+            <button
+              onClick={() => setProfileOpen(!profileOpen)}
+              className="flex h-12 w-12 items-center justify-center rounded-full border border-stone-line bg-stone-paper text-ink transition-colors hover:bg-stone-fog"
+              aria-label="User Profile"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="5" />
+              </svg>
+            </button>
+            <AnimatePresence>
+              {profileOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 mt-2 w-48 border border-stone-line bg-stone-paper py-2 shadow-lg rounded-md"
+                >
+                  {isLoggedIn ? (
+                    <>
+                      <Link href={dashboardUrl} className="block px-4 py-2 text-sm transition-colors hover:bg-stone-fog hover:text-brass-dark" onClick={() => setProfileOpen(false)}>
+                        Dashboard
+                      </Link>
+                      <button onClick={() => { clearTokens(); setIsLoggedIn(false); setProfileOpen(false); }} className="block w-full text-left px-4 py-2 text-sm transition-colors hover:bg-stone-fog hover:text-brass-dark">
+                        Logout
+                      </button>
+                    </>
+                  ) : (
+                    <Link href="/admin" className="block px-4 py-2 text-sm transition-colors hover:bg-stone-fog hover:text-brass-dark" onClick={() => setProfileOpen(false)}>
+                      Login
+                    </Link>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           {/* Mobile hamburger — NFR-UI-001 */}
           <button
