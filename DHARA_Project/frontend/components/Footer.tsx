@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import NewsletterForm from "@/components/NewsletterForm";
 import { fetchSettings } from "@/lib/api";
 import {
@@ -46,13 +47,7 @@ export default async function Footer() {
       <div className="container-content relative grid gap-10 py-16 md:grid-cols-4">
         <div>
           <div className="flex items-center gap-2.5 font-display text-lg">
-            <span
-              className="flex h-8 w-8 items-center justify-center bg-brass text-sm font-bold text-ink"
-              style={{ clipPath: "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)" }}
-            >
-              D
-            </span>
-            DHARA
+            <Image src="/images/footer/logo-white.png" alt="Dhara Logo" width={160} height={40} className="w-auto h-10 object-contain" />
           </div>
           <p className="mt-3 max-w-xs text-sm text-stone-line">
             Civil engineering, architecture, construction and property development —
