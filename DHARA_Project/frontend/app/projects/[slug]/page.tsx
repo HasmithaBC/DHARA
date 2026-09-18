@@ -6,8 +6,9 @@ import Reveal from "@/components/motion/Reveal";
 import { StaggerGroup, StaggerItem } from "@/components/motion/StaggerGroup";
 import SmartMedia, { isVideoUrl } from "@/components/SmartMedia";
 
-export async function generateMetadata({ params }: { params: { slug: string } }) {
-  const project = await fetchProject(params.slug);
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const project = await fetchProject(slug);
   if (!project) return {};
   return {
     title: project.title,
@@ -15,14 +16,15 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   };
 }
 
-export default async function ProjectDetailPage({ params }: { params: { slug: string } }) {
+export default async function ProjectDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
   const [project, allProjects] = await Promise.all([
-    fetchProject(params.slug),
+    fetchProject(slug),
     fetchProjects(),
   ]);
   if (!project) notFound();
 
-  const otherProjects = allProjects.filter((p) => p.slug !== params.slug).slice(0, 3);
+  const otherProjects = allProjects.filter((p) => p.slug !== slug).slice(0, 3);
   const gallery: string[] = project.gallery_images ?? [];
 
   return (

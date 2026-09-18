@@ -41,8 +41,9 @@ const SERVICE_GALLERY: Record<string, string[]> = {
   ],
 };
 
-export async function generateMetadata({ params }: { params: { slug: string } }) {
-  const service = await fetchService(params.slug);
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const service = await fetchService(slug);
   if (!service) return {};
   return {
     title: service.title,
@@ -50,11 +51,12 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   };
 }
 
-export default async function ServiceDetailPage({ params }: { params: { slug: string } }) {
-  const service = await fetchService(params.slug);
+export default async function ServiceDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const service = await fetchService(slug);
   if (!service) notFound();
   const relatedProjects = await fetchProjects();
-  const gallery = SERVICE_GALLERY[params.slug] ?? [];
+  const gallery = SERVICE_GALLERY[slug] ?? [];
 
   // Parse body into paragraphs and bullet list
   const bodyText = service.body ?? service.summary;
@@ -157,7 +159,7 @@ export default async function ServiceDetailPage({ params }: { params: { slug: st
                 { slug: "boq-estimation", label: "BOQ & Cost Auditing" },
                 { slug: "3d-visualization", label: "3D Visualisation" },
               ]
-                .filter((s) => s.slug !== params.slug)
+                .filter((s) => s.slug !== slug)
                 .map((s) => (
                   <li key={s.slug}>
                     <Link
