@@ -115,6 +115,12 @@ export interface Lead {
   created_at: string
 }
 
+export interface ServiceProcessStep {
+  step: number
+  title: string
+  description: string
+}
+
 export interface Service {
   id: string
   slug: string
@@ -124,6 +130,9 @@ export interface Service {
   icon: string
   hero_image: string
   sort_order: number
+  deliverables?: string[]
+  process_steps?: ServiceProcessStep[]
+  sectors?: string[]
 }
 
 export interface Project {
@@ -131,7 +140,7 @@ export interface Project {
   slug: string
   title: string
   client_name: string
-  sector: string
+  sector: 'Residential' | 'Commercial' | 'Industrial' | 'Hospitality' | 'Infrastructure' | string
   location: string
   year_completed: number
   scope: string
@@ -140,8 +149,12 @@ export interface Project {
   body: string
   cover_image: string
   gallery: string[]
-  boq_metrics: any
+  boq_metrics: Record<string, string | number>
   is_featured: boolean
+  before_image?: string
+  after_image?: string
+  services_used?: string[]
+  district_id?: string
 }
 
 export interface Testimonial {
