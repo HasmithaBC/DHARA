@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchProjects, fetchService } from "@/lib/api";
 import Reveal from "@/components/motion/Reveal";
+import Carousel from "@/components/Carousel";
 import { StaggerGroup, StaggerItem } from "@/components/motion/StaggerGroup";
 
 // Per-service supplementary image galleries mapped to available assets
@@ -51,11 +52,18 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
+const SERVICE_TO_SECTOR: Record<string, string> = {
+  "tower-foundations": "Infrastructure",
+  "mep": "Industrial",
+};
+
 export default async function ServiceDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const service = await fetchService(slug);
   if (!service) notFound();
-  const relatedProjects = await fetchProjects();
+  
+  const sector = SERVICE_TO_SECTOR[slug] || "Residential";
+  const relatedProjects = await fetchProjects(sector);
   const gallery = SERVICE_GALLERY[slug] ?? [];
 
   // Parse body into paragraphs and bullet list
@@ -195,41 +203,38 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
       </div>
 
       {/* Related Projects */}
-      {relatedProjects.length > 0 && (
-        <div className="border-t border-stone-line bg-stone-paper py-14">
-          <div className="container-content">
-            <Reveal>
-              <p className="eyebrow">Portfolio</p>
-              <h2 className="mt-2 font-display text-2xl text-ink">Related Projects</h2>
-            </Reveal>
-            <StaggerGroup className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {relatedProjects.slice(0, 3).map((p) => (
-                <StaggerItem key={p.id}>
-                  <Link href={`/projects/${p.slug}`} className="group block">
-                    <div className="relative aspect-[4/3] overflow-hidden bg-stone-fog">
-                      <Image
-                        src={p.cover_image}
-                        alt={p.title}
-                        fill
-                        className="object-cover transition-transform duration-500 group-hover:scale-105"
-                      />
-                    </div>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className="font-display text-base text-ink transition-colors group-hover:text-brass-dark">{p.title}</span>
-                      <span className="text-xs text-ink-soft">{p.location}, {p.year_completed}</span>
-                    </div>
-                  </Link>
-                </StaggerItem>
+      <div className="border-t border-stone-line bg-stone-paper py-14">
+        <div className="container-content">
+          <Reveal>
+            <p className="eyebrow">Portfolio</p>
+            <h2 className="mt-2 font-display text-2xl text-ink">Related Projects</h2>
+          </Reveal>
+          <div className="mt-8">
+            <Carousel 
+              items={relatedProjects.map((p) => (
+                <Link key={p.id} href={`/projects/${p.slug}`} className="group block h-full">
+                  <div className="relative aspect-[4/3] overflow-hidden bg-stone-fog">
+                    <Image
+                      src={p.cover_image}
+                      alt={p.title}
+                      fill
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="font-display text-base text-ink transition-colors group-hover:text-brass-dark">{p.title}</span>
+                    <span className="text-xs text-ink-soft">{p.location}, {p.year_completed}</span>
+                  </div>
+                </Link>
               ))}
-            </StaggerGroup>
-            <div className="mt-8">
-              <Link href="/projects" className="btn-outline inline-flex transition-transform hover:-translate-y-0.5">
-                View All Projects
-              </Link>
-            </div>
+              itemsPerView={3}
+              gridClassName="sm:grid-cols-2 lg:grid-cols-3"
+              viewAllLink="/projects"
+              viewAllText="View All Projects"
+            />
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

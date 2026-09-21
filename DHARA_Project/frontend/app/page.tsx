@@ -5,6 +5,7 @@ import PropertyCard from "@/components/PropertyCard";
 import Reveal from "@/components/motion/Reveal";
 import Counter from "@/components/motion/Counter";
 import { StaggerGroup, StaggerItem } from "@/components/motion/StaggerGroup";
+import Carousel from "@/components/Carousel";
 import VideoHighlight from "@/components/VideoHighlight";
 import {
   IconBlueprint,
@@ -22,7 +23,7 @@ const WHY_DHARA_ICONS = [IconHardHat, IconBlueprint, IconCheckShield];
 
 export default async function HomePage() {
   const [featured, services, projects, testimonials] = await Promise.all([
-    fetchProperties({ featured: "true", per_page: "8" }),
+    fetchProperties({ featured: "true", per_page: "12" }),
     fetchServices(),
     fetchProjects(),
     fetchTestimonials(),
@@ -135,17 +136,20 @@ export default async function HomePage() {
             <p className="eyebrow">Featured Listings</p>
             <h2 className="mt-2 font-display text-2xl text-ink">Properties Available Now</h2>
           </div>
-          <Link href="/properties" className="hidden text-sm underline decoration-brass underline-offset-4 transition-colors hover:text-brass-dark sm:inline">
-            See all properties
-          </Link>
         </Reveal>
-        <StaggerGroup className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {featured.data.slice(0, 8).map((p) => (
-            <StaggerItem key={p.id} className="transition-shadow duration-300 hover:shadow-xl">
-              <PropertyCard property={p} />
-            </StaggerItem>
-          ))}
-        </StaggerGroup>
+        <div className="mt-8">
+          <Carousel 
+            items={featured.data.map((p) => (
+              <div key={p.id} className="transition-shadow duration-300 hover:shadow-xl h-full">
+                <PropertyCard property={p} />
+              </div>
+            ))}
+            itemsPerView={4}
+            gridClassName="sm:grid-cols-2 lg:grid-cols-4"
+            viewAllLink="/properties"
+            viewAllText="See all properties"
+          />
+        </div>
       </section>
 
       {/* Services — FR-HOM-005 */}
@@ -156,10 +160,10 @@ export default async function HomePage() {
             <p className="eyebrow">What We Do</p>
             <h2 className="mt-2 font-display text-2xl text-ink">Services</h2>
           </Reveal>
-          <StaggerGroup className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {services.map((s) => (
-              <StaggerItem key={s.id}>
-                <Link href={`/services/${s.slug}`} className="card-elevated group relative block h-full overflow-hidden p-6">
+          <div className="mt-8">
+            <Carousel 
+              items={services.map((s) => (
+                <Link key={s.id} href={`/services/${s.slug}`} className="card-elevated group relative block h-full overflow-hidden p-6">
                   <div className="absolute inset-x-0 top-0 h-0.5 origin-left scale-x-0 bg-brass transition-transform duration-300 group-hover:scale-x-100" />
                   <div className="flex h-11 w-11 items-center justify-center border border-stone-line bg-stone-fog text-brass-dark transition-colors group-hover:border-brass group-hover:bg-brass group-hover:text-ink">
                     <IconBlueprint className="h-5 w-5" />
@@ -170,9 +174,11 @@ export default async function HomePage() {
                     Learn more →
                   </span>
                 </Link>
-              </StaggerItem>
-            ))}
-          </StaggerGroup>
+              ))}
+              itemsPerView={6}
+              gridClassName="sm:grid-cols-2 lg:grid-cols-3"
+            />
+          </div>
         </div>
       </section>
 
@@ -182,10 +188,10 @@ export default async function HomePage() {
           <p className="eyebrow">Portfolio</p>
           <h2 className="mt-2 font-display text-2xl text-ink">Featured Construction Projects</h2>
         </Reveal>
-        <StaggerGroup className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {projects.filter((p) => p.is_featured).slice(0, 6).map((p) => (
-            <StaggerItem key={p.id}>
-              <Link href={`/projects/${p.slug}`} className="group block">
+        <div className="mt-8">
+          <Carousel 
+            items={projects.filter((p) => p.is_featured).map((p) => (
+              <Link key={p.id} href={`/projects/${p.slug}`} className="group block h-full">
                 <div className="relative aspect-[4/3] overflow-hidden bg-stone-fog">
                   <Image
                     src={p.cover_image}
@@ -203,14 +209,13 @@ export default async function HomePage() {
                   <span className="text-xs text-ink-soft">{p.location}, {p.year_completed}</span>
                 </div>
               </Link>
-            </StaggerItem>
-          ))}
-        </StaggerGroup>
-        <Reveal className="mt-10 text-center">
-          <Link href="/projects" className="btn-outline inline-flex transition-transform hover:-translate-y-0.5">
-            View All Projects
-          </Link>
-        </Reveal>
+            ))}
+            itemsPerView={6}
+            gridClassName="sm:grid-cols-2 lg:grid-cols-3"
+            viewAllLink="/projects"
+            viewAllText="View All Projects"
+          />
+        </div>
       </section>
 
       {/* Video Highlight — plays the real reel instead of a frozen thumbnail */}

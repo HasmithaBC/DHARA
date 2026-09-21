@@ -93,6 +93,23 @@ export default async function PropertyCatalogue({ title, searchParams, forced }:
             {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}{n === 5 ? "+" : ""}</option>)}
           </select>
         </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-ink-soft">Bathrooms</label>
+          <select name="baths" defaultValue={params.baths || ""} className="w-full border border-stone-line px-2 py-2">
+            <option value="">Any</option>
+            {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}{n === 5 ? "+" : ""}</option>)}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-soft">Min Perches</label>
+            <input type="number" step="any" name="perches_min" defaultValue={params.perches_min || ""} className="w-full border border-stone-line px-2 py-2" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-soft">Max Perches</label>
+            <input type="number" step="any" name="perches_max" defaultValue={params.perches_max || ""} className="w-full border border-stone-line px-2 py-2" />
+          </div>
+        </div>
         {Object.entries(forced ?? {}).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
         <button type="submit" className="btn-primary w-full justify-center transition-transform hover:-translate-y-0.5">
           Apply Filters

@@ -9,11 +9,10 @@ import { clearTokens, getRole } from "@/lib/admin-api";
 import { homeForRole } from "@/lib/admin-guard";
 
 const propertyLinks = [
-  { href: "/properties/lands", label: "Land for Sale" },
-  { href: "/properties/houses", label: "Houses for Sale" },
-  { href: "/properties/houses/rent", label: "Houses for Rent" },
-  { href: "/properties/commercial/rent", label: "Commercial for Rent" },
-  { href: "/properties/other", label: "Commercial & Other for Sale" },
+  { href: "/properties?category=LAND", label: "Lands" },
+  { href: "/properties?category=HOUSE", label: "Houses" },
+  { href: "/properties?category=COMMERCIAL", label: "Commercial" },
+  { href: "/properties?category=OTHER", label: "Other" },
 ];
 
 const serviceLinks = [
@@ -90,9 +89,9 @@ export default function Header() {
             </button>
             <div className="invisible absolute left-0 top-full w-64 origin-top -translate-y-1 border border-stone-line bg-stone-paper py-2 opacity-0 shadow-lg transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
               {propertyLinks.map((l) => (
-                <Link key={l.href} href={l.href} className="block px-4 py-2 text-sm transition-colors hover:bg-stone-fog hover:text-brass-dark">
+                <a key={l.href} href={l.href} className="block px-4 py-2 text-sm transition-colors hover:bg-stone-fog hover:text-brass-dark">
                   {l.label}
-                </Link>
+                </a>
               ))}
             </div>
           </div>
@@ -118,7 +117,7 @@ export default function Header() {
           <Link href="/contact" className="transition-colors hover:text-brass-dark">Contact</Link>
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-5">
           <button
             onClick={toggle}
             className="hidden border border-stone-line px-2 py-1 text-xs transition-colors hover:border-brass hover:text-brass-dark sm:inline-flex"
@@ -126,7 +125,6 @@ export default function Header() {
           >
             {currency}
           </button>
-          <Link href="/properties" className="btn-outline hidden sm:inline-flex">Properties</Link>
           <a
             href={`https://wa.me/${WHATSAPP}`}
             target="_blank"
@@ -246,9 +244,9 @@ export default function Header() {
                       className="overflow-hidden"
                     >
                       {propertyLinks.map((l) => (
-                        <Link key={l.href} href={l.href} onClick={() => setOpen(false)} className="block border-b border-stone-line py-3 pl-4 text-sm text-ink-soft">
+                        <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="block border-b border-stone-line py-3 pl-4 text-sm text-ink-soft">
                           {l.label}
-                        </Link>
+                        </a>
                       ))}
                     </motion.div>
                   )}
