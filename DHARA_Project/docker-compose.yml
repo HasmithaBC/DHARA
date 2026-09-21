@@ -32,7 +32,7 @@ services:
       JWT_SECRET: dev-secret-change-me
       ALLOWED_ORIGINS: http://localhost:3000
       SIGNED_URL_SECRET: dev-signed-url-secret
-      SITE_BASE_URL: http://localhost:3000
+      SITE_BASE_URL: http://localhost:8080
       FRONTEND_BASE_URL: http://localhost:3000
     ports:
       - "8080:8080"

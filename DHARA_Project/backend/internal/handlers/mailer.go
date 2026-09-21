@@ -194,7 +194,7 @@ func optionalRow(label, value string) string {
 // --- Password reset (auth.go) and newsletter double opt-in (public.go) ---
 
 func sendPasswordResetEmail(cfg *config.Config, toEmail, resetToken string) {
-	link := fmt.Sprintf("%s/admin/reset-password?token=%s", cfg.SiteBaseURL, resetToken)
+	link := fmt.Sprintf("%s/admin/reset-password?token=%s", cfg.FrontendBaseURL, resetToken)
 	body := fmt.Sprintf(`<p>A password reset was requested for your Dhara admin account.</p>
 		<p><a href="%s">Reset your password</a> (link expires in 30 minutes).</p>
 		<p>If you didn't request this, you can safely ignore this email.</p>`, link)
@@ -202,7 +202,7 @@ func sendPasswordResetEmail(cfg *config.Config, toEmail, resetToken string) {
 }
 
 func sendNewsletterConfirmation(cfg *config.Config, toEmail, token string) {
-	link := fmt.Sprintf("%s/api/v1/newsletter/confirm?token=%s", cfg.FrontendBaseURL, token)
+	link := fmt.Sprintf("%s/api/v1/newsletter/confirm?token=%s", cfg.SiteBaseURL, token)
 	body := fmt.Sprintf(`<p>Please confirm your subscription to Dhara property and construction updates.</p>
 		<p><a href="%s">Confirm subscription</a></p>`, link)
 	sendEmail(cfg, toEmail, "Confirm your subscription — Dhara", body)
