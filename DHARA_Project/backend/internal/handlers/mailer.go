@@ -106,7 +106,7 @@ type leadNotification struct {
 // window implied by the acceptance criteria (both sends happen synchronously
 // in the goroutine the caller already dispatches this from).
 func NotifyNewLead(cfg *config.Config, n leadNotification) {
-	adminURL := fmt.Sprintf("%s/admin/leads/%s", cfg.SiteBaseURL, n.LeadID)
+	adminURL := fmt.Sprintf("%s/admin/leads/%s", cfg.FrontendBaseURL, n.LeadID)
 
 	salesSubject := fmt.Sprintf("New %s lead: %s", friendlyLeadType(n.LeadType), n.Name)
 	salesBody := fmt.Sprintf(`
@@ -202,7 +202,7 @@ func sendPasswordResetEmail(cfg *config.Config, toEmail, resetToken string) {
 }
 
 func sendNewsletterConfirmation(cfg *config.Config, toEmail, token string) {
-	link := fmt.Sprintf("%s/api/v1/newsletter/confirm?token=%s", cfg.SiteBaseURL, token)
+	link := fmt.Sprintf("%s/api/v1/newsletter/confirm?token=%s", cfg.FrontendBaseURL, token)
 	body := fmt.Sprintf(`<p>Please confirm your subscription to Dhara property and construction updates.</p>
 		<p><a href="%s">Confirm subscription</a></p>`, link)
 	sendEmail(cfg, toEmail, "Confirm your subscription — Dhara", body)
@@ -221,7 +221,7 @@ func SendDailyDigest(cfg *config.Config, newLast24h, staleOver48h int) {
 		<p><strong>%d</strong> new leads in the last 24 hours.</p>
 		<p><strong>%d</strong> leads have been sitting in NEW status for more than 48 hours and may need follow-up.</p>
 		<p><a href="%s/admin/leads?status=NEW">Review NEW leads</a></p>`,
-		newLast24h, staleOver48h, cfg.SiteBaseURL)
+		newLast24h, staleOver48h, cfg.FrontendBaseURL)
 	sendEmail(cfg, cfg.SalesInboxEmail, subject, body)
 }
 

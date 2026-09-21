@@ -5,12 +5,16 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { clearTokens, getRole, getToken } from "@/lib/admin-api";
 import { ADMIN_NAV, AdminRole } from "@/lib/admin-guard";
+import { useIdleLogout } from "@/lib/use-idle-logout";
 
 export default function PanelLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [role, setRoleState] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+
+  // FR-ADM-001: sign out after 60 minutes of inactivity.
+  useIdleLogout();
 
   useEffect(() => {
     const token = getToken();

@@ -15,7 +15,7 @@ services:
       - ./backend/migrations/0001_init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
       - ./backend/seed/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -32,7 +32,8 @@ services:
       JWT_SECRET: dev-secret-change-me
       ALLOWED_ORIGINS: http://localhost:3000
       SIGNED_URL_SECRET: dev-signed-url-secret
-      SITE_BASE_URL: http://localhost:8080
+      SITE_BASE_URL: http://localhost:3000
+      FRONTEND_BASE_URL: http://localhost:3000
     ports:
       - "8080:8080"
 
