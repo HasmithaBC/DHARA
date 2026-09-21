@@ -140,7 +140,7 @@ export default async function HomePage() {
         <div className="mt-8">
           <Carousel 
             items={featured.data.map((p) => (
-              <div key={p.id} className="transition-shadow duration-300 hover:shadow-xl h-full">
+              <div key={p.id} className="transition-shadow duration-300 hover:shadow-xl h-full flex flex-col">
                 <PropertyCard property={p} />
               </div>
             ))}

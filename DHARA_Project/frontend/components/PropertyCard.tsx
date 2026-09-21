@@ -28,9 +28,9 @@ export default function PropertyCard({ property }: { property: PropertySummary }
   return (
     <Link
       href={detailHref}
-      className="group block border border-stone-line bg-stone-paper transition-all duration-300 hover:-translate-y-1 hover:border-brass hover:shadow-xl"
+      className="group flex h-full flex-col border border-stone-line bg-stone-paper transition-all duration-300 hover:-translate-y-1 hover:border-brass hover:shadow-xl"
     >
-      <div className="relative aspect-[4/3] w-full overflow-hidden bg-stone-fog">
+      <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-stone-fog">
         {property.cover_url && (
           <Image
             src={property.cover_url}

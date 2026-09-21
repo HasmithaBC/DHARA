@@ -212,8 +212,8 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
           <div className="mt-8">
             <Carousel 
               items={relatedProjects.map((p) => (
-                <Link key={p.id} href={`/projects/${p.slug}`} className="group block h-full">
-                  <div className="relative aspect-[4/3] overflow-hidden bg-stone-fog">
+                <Link key={p.id} href={`/projects/${p.slug}`} className="group flex flex-col h-full">
+                  <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-stone-fog">
                     <Image
                       src={p.cover_image}
                       alt={p.title}
@@ -221,9 +221,9 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
                       className="object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                   </div>
-                  <div className="mt-2 flex items-center justify-between">
+                  <div className="mt-2 flex flex-1 flex-col">
                     <span className="font-display text-base text-ink transition-colors group-hover:text-brass-dark">{p.title}</span>
-                    <span className="text-xs text-ink-soft">{p.location}, {p.year_completed}</span>
+                    <span className="mt-auto text-xs text-ink-soft">{p.location}, {p.year_completed}</span>
                   </div>
                 </Link>
               ))}
