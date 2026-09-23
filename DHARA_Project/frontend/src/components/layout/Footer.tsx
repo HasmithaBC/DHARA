@@ -103,9 +103,10 @@ export function Footer() {
 
       <div className="max-w-[1440px] mx-auto px-4 md:px-8 lg:px-12 mt-8 flex flex-col md:flex-row items-center justify-between text-xs text-white/40">
         <p>&copy; {new Date().getFullYear()} Dhara Construction & Technology (Pvt) Ltd. All rights reserved.</p>
-        <div className="flex space-x-6 mt-4 md:mt-0">
+        <div className="flex space-x-6 mt-4 md:mt-0 items-center">
           <Link href="/privacy-policy" className="hover:text-white transition-colors min-h-[44px] flex items-center">Privacy Policy</Link>
           <Link href="/terms" className="hover:text-white transition-colors min-h-[44px] flex items-center">Terms of Service</Link>
+          <Link href="/admin" className="hover:text-primary transition-colors min-h-[44px] flex items-center text-primary/80 font-medium">Staff Portal</Link>
         </div>
       </div>
     </footer>

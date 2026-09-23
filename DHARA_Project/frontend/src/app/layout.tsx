@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Montserrat } from "next/font/google";
 import "./globals.css";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
-import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
+import { PublicLayoutWrapper } from "@/components/layout/PublicLayoutWrapper";
 import { ToastProvider } from "@/components/ui/Toast";
 
 const inter = Inter({
@@ -42,12 +40,9 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans bg-background text-foreground antialiased">
         <ToastProvider>
-          <Header />
-          <Breadcrumbs />
-          <main className="flex-1">
+          <PublicLayoutWrapper>
             {children}
-          </main>
-          <Footer />
+          </PublicLayoutWrapper>
         </ToastProvider>
       </body>
     </html>
