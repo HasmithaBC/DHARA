@@ -25,6 +25,7 @@ type Config struct {
 	WhatsAppPhoneID  string
 	WhatsAppSalesNum string
 	HighIntentLKR    float64
+	FrontendBaseURL  string
 }
 
 func getEnv(key, fallback string) string {
@@ -73,5 +74,6 @@ func Load() *Config {
 		WhatsAppPhoneID:  getEnv("WHATSAPP_PHONE_NUMBER_ID", ""),
 		WhatsAppSalesNum: getEnv("WHATSAPP_SALES_NUMBER", ""),
 		HighIntentLKR:    getEnvFloat("HIGH_INTENT_OFFER_THRESHOLD_LKR", 10000000),
+		FrontendBaseURL:  getEnv("FRONTEND_BASE_URL", getEnv("SITE_BASE_URL", "https://dharact.com")),
 	}
 }
