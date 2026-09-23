@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useCurrency } from "@/lib/currency-context";
 import { clearTokens, getRole } from "@/lib/admin-api";
 import { homeForRole } from "@/lib/admin-guard";
+import { useRouter } from "next/navigation";
 
 const propertyLinks = [
   { href: "/properties?category=LAND", label: "Lands" },
@@ -28,6 +29,7 @@ const serviceLinks = [
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "94763774551";
 
 export default function Header() {
+  const router = useRouter();
   const { currency, toggle } = useCurrency();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -159,7 +161,13 @@ export default function Header() {
                       <Link href={dashboardUrl} className="block px-4 py-2 text-sm transition-colors hover:bg-stone-fog hover:text-brass-dark" onClick={() => setProfileOpen(false)}>
                         Dashboard
                       </Link>
-                      <button onClick={() => { clearTokens(); setIsLoggedIn(false); setProfileOpen(false); }} className="block w-full text-left px-4 py-2 text-sm transition-colors hover:bg-stone-fog hover:text-brass-dark">
+                      <button onClick={() => { 
+                        clearTokens(); 
+                        setIsLoggedIn(false); 
+                        setProfileOpen(false); 
+                        router.push('/admin');
+                        router.refresh();
+                      }} className="block w-full text-left px-4 py-2 text-sm transition-colors hover:bg-stone-fog hover:text-brass-dark">
                         Logout
                       </button>
                     </>
