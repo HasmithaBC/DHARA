@@ -106,7 +106,7 @@ type leadNotification struct {
 // window implied by the acceptance criteria (both sends happen synchronously
 // in the goroutine the caller already dispatches this from).
 func NotifyNewLead(cfg *config.Config, n leadNotification) {
-	adminURL := fmt.Sprintf("%s/admin/leads/%s", cfg.SiteBaseURL, n.LeadID)
+	adminURL := fmt.Sprintf("%s/admin/leads/%s", cfg.FrontendBaseURL, n.LeadID)
 
 	salesSubject := fmt.Sprintf("New %s lead: %s", friendlyLeadType(n.LeadType), n.Name)
 	salesBody := fmt.Sprintf(`
@@ -194,7 +194,7 @@ func optionalRow(label, value string) string {
 // --- Password reset (auth.go) and newsletter double opt-in (public.go) ---
 
 func sendPasswordResetEmail(cfg *config.Config, toEmail, resetToken string) {
-	link := fmt.Sprintf("%s/admin/reset-password?token=%s", cfg.SiteBaseURL, resetToken)
+	link := fmt.Sprintf("%s/admin/reset-password?token=%s", cfg.FrontendBaseURL, resetToken)
 	body := fmt.Sprintf(`<p>A password reset was requested for your Dhara admin account.</p>
 		<p><a href="%s">Reset your password</a> (link expires in 30 minutes).</p>
 		<p>If you didn't request this, you can safely ignore this email.</p>`, link)
@@ -221,7 +221,7 @@ func SendDailyDigest(cfg *config.Config, newLast24h, staleOver48h int) {
 		<p><strong>%d</strong> new leads in the last 24 hours.</p>
 		<p><strong>%d</strong> leads have been sitting in NEW status for more than 48 hours and may need follow-up.</p>
 		<p><a href="%s/admin/leads?status=NEW">Review NEW leads</a></p>`,
-		newLast24h, staleOver48h, cfg.SiteBaseURL)
+		newLast24h, staleOver48h, cfg.FrontendBaseURL)
 	sendEmail(cfg, cfg.SalesInboxEmail, subject, body)
 }
 

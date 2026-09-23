@@ -4,7 +4,7 @@
 // localStorage for simplicity in this reference build; a production hand-off
 // may prefer httpOnly cookies issued by a small Next.js route handler instead.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8080/api/v1";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
