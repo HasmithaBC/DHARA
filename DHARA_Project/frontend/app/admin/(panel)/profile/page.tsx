@@ -131,7 +131,11 @@ export default function ProfilePage() {
                 value={profile?.email || ""}
                 className="w-full border border-stone-line bg-stone-fog px-3 py-2 text-ink-soft cursor-not-allowed"
               />
-              <span className="text-[11px] text-ink-soft mt-1 block">
+              <p className="text-[11px] text-ink-soft mt-1.5 flex items-center gap-1.5 bg-stone-fog/80 border border-stone-line px-2.5 py-1.5 rounded">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brass shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                <span>To change your email address, please contact a system administrator.</span>
+              </p>
+              <span className="text-[11px] text-ink-soft mt-1.5 block">
                 Role: <span className="font-medium text-ink">{profile?.role?.replace("_", " ")}</span>
               </span>
             </div>

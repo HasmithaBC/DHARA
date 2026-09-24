@@ -950,11 +950,12 @@ func (h *AdminHandler) wouldRemoveLastAdmin(id string) bool {
 	return others == 0
 }
 
-// PATCH /admin/users/{id} — rename, change role, (de)activate, unlock.
+// PATCH /admin/users/{id} — rename, change email, change role, (de)activate, unlock.
 func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req struct {
 		Name     *string `json:"name"`
+		Email    *string `json:"email"`
 		Role     *string `json:"role"`
 		IsActive *bool   `json:"is_active"`
 		Unlock   *bool   `json:"unlock"`
@@ -982,16 +983,30 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, 400, "VALIDATION_ERROR", "Name must be 2–100 characters", nil)
 			return
 		}
-		h.DB.Exec(`UPDATE users SET name=$1 WHERE id=$2`, n, id)
+		h.DB.Exec(`UPDATE users SET name=$1, updated_at=now() WHERE id=$2`, n, id)
+	}
+	if req.Email != nil {
+		email := strings.ToLower(strings.TrimSpace(*req.Email))
+		if at := strings.Index(email, "@"); at < 1 || !strings.Contains(email[at:], ".") || len(email) > 160 {
+			httpx.Error(w, 400, "VALIDATION_ERROR", "Enter a valid email address", map[string]string{"email": "Invalid email address"})
+			return
+		}
+		var exists int
+		h.DB.QueryRow(`SELECT count(*) FROM users WHERE email=$1 AND id<>$2`, email, id).Scan(&exists)
+		if exists > 0 {
+			httpx.Error(w, 400, "VALIDATION_ERROR", "That email is already in use", map[string]string{"email": "Already in use"})
+			return
+		}
+		h.DB.Exec(`UPDATE users SET email=$1, updated_at=now() WHERE id=$2`, email, id)
 	}
 	if req.Role != nil {
-		h.DB.Exec(`UPDATE users SET role=$1 WHERE id=$2`, *req.Role, id)
+		h.DB.Exec(`UPDATE users SET role=$1, updated_at=now() WHERE id=$2`, *req.Role, id)
 	}
 	if req.IsActive != nil {
-		h.DB.Exec(`UPDATE users SET is_active=$1 WHERE id=$2`, *req.IsActive, id)
+		h.DB.Exec(`UPDATE users SET is_active=$1, updated_at=now() WHERE id=$2`, *req.IsActive, id)
 	}
 	if req.Unlock != nil && *req.Unlock {
-		h.DB.Exec(`UPDATE users SET failed_login_attempts=0, locked_until=NULL WHERE id=$1`, id)
+		h.DB.Exec(`UPDATE users SET failed_login_attempts=0, locked_until=NULL, updated_at=now() WHERE id=$1`, id)
 	}
 	h.auditWithDiff(h.userID(r), "UPDATE", "user", id, nil, req)
 	httpx.JSON(w, 200, map[string]string{"status": "updated"})
