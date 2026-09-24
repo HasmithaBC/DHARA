@@ -99,13 +99,13 @@ export default function ProfilePage() {
   if (guard.status !== "allowed") return <AccessDenied role={guard.role} />;
 
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="p-8 max-w-5xl">
       <div className="mb-6">
         <h1 className="font-display text-2xl text-ink">My Profile</h1>
         <p className="text-xs text-ink-soft mt-1">Manage your account information and password</p>
       </div>
 
-      <div className="space-y-6 text-sm">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-sm items-start">
         {/* Profile Info Form */}
         <div className="border border-stone-line bg-stone-paper p-6 shadow-sm">
           <h2 className="font-display text-base text-ink mb-4">Account Details</h2>

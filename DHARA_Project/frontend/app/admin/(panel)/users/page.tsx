@@ -28,6 +28,10 @@ export default function UsersAdminPage() {
   const [editError, setEditError] = useState("");
   const [editLoading, setEditLoading] = useState(false);
 
+  // Deactivate User State
+  const [deactivatingUser, setDeactivatingUser] = useState<User | null>(null);
+  const [deactivateLoading, setDeactivateLoading] = useState(false);
+
   async function load() {
     try {
       setRows(await adminJSON<User[]>("/users"));
@@ -88,13 +92,20 @@ export default function UsersAdminPage() {
     }
   }
 
-  async function deactivate(id: string) {
-    if (!confirm("Are you sure you want to deactivate this user?")) return;
+  async function confirmDeactivate() {
+    if (!deactivatingUser) return;
+    setDeactivateLoading(true);
     try {
-      await adminJSON(`/users/${id}`, { method: "DELETE" });
+      await adminJSON(`/users/${deactivatingUser.id}`, { method: "DELETE" });
+      setSuccess(`User "${deactivatingUser.name}" was deactivated successfully`);
+      setTimeout(() => setSuccess(""), 3000);
+      setDeactivatingUser(null);
       load();
     } catch (e: any) {
-      setError(e.message);
+      setError(e.message || "Failed to deactivate user");
+      setDeactivatingUser(null);
+    } finally {
+      setDeactivateLoading(false);
     }
   }
 
@@ -156,13 +167,17 @@ export default function UsersAdminPage() {
                 >
                   Reset PW
                 </button>
-                {u.is_active && (
-                  <button
-                    onClick={() => deactivate(u.id)}
-                    className="text-xs text-red-700 hover:text-red-900 transition-colors"
-                  >
-                    Deactivate
-                  </button>
+                {currentUser?.id === u.id ? (
+                  <span className="text-[11px] text-ink-soft/70 italic px-1">(You)</span>
+                ) : (
+                  u.is_active && (
+                    <button
+                      onClick={() => setDeactivatingUser(u)}
+                      className="text-xs text-red-700 hover:text-red-900 transition-colors"
+                    >
+                      Deactivate
+                    </button>
+                  )
                 )}
               </div>
             </div>
@@ -274,13 +289,19 @@ export default function UsersAdminPage() {
               <div>
                 <label className="block text-xs font-medium text-ink mb-1">Account Status</label>
                 <select
+                  disabled={editingUser.id === currentUser?.id}
                   value={editForm.is_active ? "active" : "inactive"}
                   onChange={(e) => setEditForm({ ...editForm, is_active: e.target.value === "active" })}
-                  className="w-full border border-stone-line px-3 py-2 text-ink focus:outline-none focus:border-ink"
+                  className="w-full border border-stone-line px-3 py-2 text-ink focus:outline-none focus:border-ink disabled:bg-stone-fog disabled:cursor-not-allowed"
                 >
                   <option value="active">Active</option>
                   <option value="inactive">Deactivated</option>
                 </select>
+                {editingUser.id === currentUser?.id && (
+                  <span className="text-[11px] text-ink-soft mt-1 block">
+                    You cannot deactivate your own account.
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">
@@ -300,6 +321,62 @@ export default function UsersAdminPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Deactivate User Confirmation Modal */}
+      {deactivatingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm border border-stone-line bg-stone-paper p-6 shadow-2xl rounded-sm">
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 border border-red-200 text-red-700">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <line x1="17" y1="8" x2="23" y2="14" />
+                  <line x1="23" y1="8" x2="17" y2="14" />
+                </svg>
+              </div>
+
+              <div className="flex-1">
+                <h3 className="font-display text-base text-ink font-semibold">
+                  Deactivate User Account?
+                </h3>
+                <p className="text-xs text-ink-soft mt-1.5 leading-relaxed">
+                  Are you sure you want to deactivate <strong className="text-ink font-medium">{deactivatingUser.name}</strong> ({deactivatingUser.email})? They will immediately lose access to the portal.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setDeactivatingUser(null)}
+                disabled={deactivateLoading}
+                className="px-3.5 py-1.5 border border-stone-line text-xs font-medium text-ink hover:bg-stone-fog transition-colors rounded-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeactivate}
+                disabled={deactivateLoading}
+                className="px-4 py-1.5 bg-red-700 hover:bg-red-800 text-stone-paper text-xs font-medium transition-colors rounded-sm disabled:opacity-50"
+              >
+                {deactivateLoading ? "Deactivating..." : "Deactivate"}
+              </button>
+            </div>
           </div>
         </div>
       )}
