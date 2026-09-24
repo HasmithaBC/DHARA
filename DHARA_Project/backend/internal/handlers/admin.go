@@ -77,7 +77,9 @@ type propertyInput struct {
 	Bedrooms          *int     `json:"bedrooms"`
 	Bathrooms         *int     `json:"bathrooms"`
 	IsFeatured        bool     `json:"is_featured"`
-	SlugOverride      string   `json:"slug"`
+		SlugOverride      string   `json:"slug"`
+
+	propertyExtInput // extra columns; see admin_extra.go
 }
 
 func (h *AdminHandler) validateProperty(in propertyInput) map[string]string {
@@ -108,6 +110,9 @@ func (h *AdminHandler) validateProperty(in propertyInput) map[string]string {
 	}
 	if in.Latitude < 5.9 || in.Latitude > 9.9 || in.Longitude < 79.5 || in.Longitude > 81.9 {
 		fields["latitude"] = "Coordinates must fall within Sri Lanka"
+	}
+	for k, v := range validateExt(in.propertyExtInput) {
+		fields[k] = v
 	}
 	return fields
 }
@@ -145,6 +150,10 @@ func (h *AdminHandler) ListAllProperties(w http.ResponseWriter, r *http.Request)
 			&p.IsFeatured, &p.PriceLKR, &p.PriceOnRequest, &p.ViewCount, &p.UpdatedAt)
 		out = append(out, p)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate properties", nil)
+		return
+	}
 	httpx.JSON(w, 200, out)
 }
 
@@ -157,13 +166,13 @@ func (h *AdminHandler) GetPropertyAdmin(w http.ResponseWriter, r *http.Request) 
 		       short_description, description, price_lkr, price_on_request, price_unit, is_negotiable,
 		       rent_period, minimum_lease_months, advance_months, deposit_lkr,
 		       province_id, district_id, city_id, address_line, show_exact_location, latitude, longitude,
-		       land_extent_perches, built_area_sqft, bedrooms, bathrooms
+				       land_extent_perches, built_area_sqft, bedrooms, bathrooms, cover_image_id
 		FROM properties WHERE id=$1`, id).Scan(
 		&p.ID, &p.ReferenceCode, &p.Title, &p.Slug, &p.Category, &p.ListingType, &p.Status, &p.IsFeatured,
 		&p.ShortDescription, &p.Description, &p.PriceLKR, &p.PriceOnRequest, &p.PriceUnit, &p.IsNegotiable,
 		&p.RentPeriod, &p.MinimumLeaseMonths, &p.AdvanceMonths, &p.DepositLKR,
 		&p.ProvinceID, &p.DistrictID, &p.CityID, &p.AddressLine, &p.ShowExactLocation, &p.Latitude, &p.Longitude,
-		&p.LandExtentPerches, &p.BuiltAreaSqft, &p.Bedrooms, &p.Bathrooms,
+		&p.LandExtentPerches, &p.BuiltAreaSqft, &p.Bedrooms, &p.Bathrooms, &p.CoverImageID,
 	)
 	if err == sql.ErrNoRows {
 		httpx.Error(w, 404, "NOT_FOUND", "Property not found", nil)
@@ -172,22 +181,28 @@ func (h *AdminHandler) GetPropertyAdmin(w http.ResponseWriter, r *http.Request) 
 		httpx.Error(w, 500, "SERVER_ERROR", "Failed to load property", nil)
 		return
 	}
-
-	imgRows, _ := h.DB.Query(`SELECT id, url, alt_text, sort_order, is_cover FROM property_images WHERE property_id=$1 ORDER BY sort_order`, p.ID)
-	for imgRows.Next() {
-		var img models.PropertyImage
-		imgRows.Scan(&img.ID, &img.URL, &img.AltText, &img.SortOrder, &img.IsCover)
-		p.Images = append(p.Images, img)
+h.loadExtended(&p)
+	imgRows, err := h.DB.Query(`SELECT id, url, alt_text, sort_order, is_cover FROM property_images WHERE property_id=$1 ORDER BY sort_order`, p.ID)
+	if err == nil {
+		for imgRows.Next() {
+			var img models.PropertyImage
+			imgRows.Scan(&img.ID, &img.URL, &img.AltText, &img.SortOrder, &img.IsCover)
+			p.Images = append(p.Images, img)
+		}
+		_ = imgRows.Err()
+		imgRows.Close()
 	}
-	imgRows.Close()
 
-	docRows, _ := h.DB.Query(`SELECT id, type, title, access, is_watermarked, download_count FROM property_documents WHERE property_id=$1`, p.ID)
-	for docRows.Next() {
-		var d models.PropertyDocument
-		docRows.Scan(&d.ID, &d.Type, &d.Title, &d.Access, &d.IsWatermarked, &d.DownloadCount)
-		p.Docs = append(p.Docs, d)
+	docRows, err := h.DB.Query(`SELECT id, type, title, access, is_watermarked, download_count FROM property_documents WHERE property_id=$1`, p.ID)
+	if err == nil {
+		for docRows.Next() {
+			var d models.PropertyDocument
+			docRows.Scan(&d.ID, &d.Type, &d.Title, &d.Access, &d.IsWatermarked, &d.DownloadCount)
+			p.Docs = append(p.Docs, d)
+		}
+		_ = docRows.Err()
+		docRows.Close()
 	}
-	docRows.Close()
 
 	httpx.JSON(w, 200, p)
 }
@@ -234,6 +249,9 @@ func (h *AdminHandler) CreateProperty(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 500, "SERVER_ERROR", "Failed to create property: "+err.Error(), nil)
 		return
 	}
+		if !h.saveExtendedOrRespond(w, id, in) {
+		return
+	}
 	h.audit(uid, "CREATE", "property", id)
 	httpx.JSON(w, 201, map[string]string{"id": id, "reference_code": refCode, "slug": slug, "status": "DRAFT"})
 }
@@ -272,6 +290,9 @@ func (h *AdminHandler) UpdateProperty(w http.ResponseWriter, r *http.Request) {
 		uid, id)
 	if err != nil {
 		httpx.Error(w, 500, "SERVER_ERROR", "Failed to update property", nil)
+		return
+	}
+		if !h.saveExtendedOrRespond(w, id, in) {
 		return
 	}
 	h.auditWithDiff(uid, "UPDATE", "property", id, before, in)
@@ -577,6 +598,10 @@ func (h *AdminHandler) ListLeads(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&l.ID, &l.LeadType, &l.PropertyID, &l.Name, &l.Email, &l.Phone, &l.Message, &l.Status, &l.AssignedTo, &l.CreatedAt)
 		out = append(out, l)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate leads", nil)
+		return
+	}
 	httpx.JSON(w, 200, out)
 }
 
@@ -692,6 +717,9 @@ func (h *AdminHandler) ExportLeads(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&leadType, &propertyID, &name, &email, &phone, &status, &assignedTo, &internalNotes, &message, &createdAt)
 		cw.Write([]string{leadType, propertyID.String, name, email, phone, status, assignedTo.String, internalNotes.String, message.String, createdAt.Format(time.RFC3339)})
 	}
+	if err := rows.Err(); err != nil {
+		return
+	}
 	cw.Flush()
 }
 
@@ -703,27 +731,31 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	h.DB.QueryRow(`SELECT count(*) FROM leads WHERE created_at > now() - interval '30 days'`).Scan(&newLeads30)
 
 	byStatus := map[string]int{}
-	rows, _ := h.DB.Query(`SELECT status, count(*) FROM properties GROUP BY status`)
-	for rows.Next() {
-		var s string
-		var c int
-		rows.Scan(&s, &c)
-		byStatus[s] = c
+	if rows, err := h.DB.Query(`SELECT status, count(*) FROM properties GROUP BY status`); err == nil {
+		for rows.Next() {
+			var s string
+			var c int
+			rows.Scan(&s, &c)
+			byStatus[s] = c
+		}
+		_ = rows.Err()
+		rows.Close()
 	}
-	rows.Close()
 
 	type topViewed struct {
 		Title     string `json:"title"`
 		ViewCount int    `json:"view_count"`
 	}
 	top := []topViewed{}
-	tvRows, _ := h.DB.Query(`SELECT title, view_count FROM properties ORDER BY view_count DESC LIMIT 5`)
-	for tvRows.Next() {
-		var t topViewed
-		tvRows.Scan(&t.Title, &t.ViewCount)
-		top = append(top, t)
+	if tvRows, err := h.DB.Query(`SELECT title, view_count FROM properties ORDER BY view_count DESC LIMIT 5`); err == nil {
+		for tvRows.Next() {
+			var t topViewed
+			tvRows.Scan(&t.Title, &t.ViewCount)
+			top = append(top, t)
+		}
+		_ = tvRows.Err()
+		tvRows.Close()
 	}
-	tvRows.Close()
 
 	var closedWon, closedLost int
 	h.DB.QueryRow(`SELECT count(*) FROM leads WHERE status='CLOSED_WON'`).Scan(&closedWon)
@@ -750,6 +782,10 @@ func (h *AdminHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		var v []byte
 		rows.Scan(&k, &v)
 		out[k] = string(v)
+	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate settings", nil)
+		return
 	}
 	httpx.JSON(w, 200, out)
 }
@@ -780,6 +816,10 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		var u models.User
 		rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.IsActive, &u.LastLoginAt, &u.CreatedAt)
 		out = append(out, u)
+	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate users", nil)
+		return
 	}
 	httpx.JSON(w, 200, out)
 }
@@ -830,6 +870,10 @@ func (h *AdminHandler) AuditLog(w http.ResponseWriter, r *http.Request) {
 			a.Diff = json.RawMessage(diff.String)
 		}
 		out = append(out, a)
+	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate audit log", nil)
+		return
 	}
 	httpx.JSON(w, 200, out)
 }

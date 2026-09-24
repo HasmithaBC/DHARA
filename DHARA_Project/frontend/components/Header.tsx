@@ -161,6 +161,9 @@ export default function Header() {
                       <Link href={dashboardUrl} className="block px-4 py-2 text-sm transition-colors hover:bg-stone-fog hover:text-brass-dark" onClick={() => setProfileOpen(false)}>
                         Dashboard
                       </Link>
+                      <Link href="/admin/profile" className="block px-4 py-2 text-sm transition-colors hover:bg-stone-fog hover:text-brass-dark" onClick={() => setProfileOpen(false)}>
+                        Edit Profile
+                      </Link>
                       <button onClick={() => { 
                         clearTokens(); 
                         setIsLoggedIn(false); 
