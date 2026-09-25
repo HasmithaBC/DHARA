@@ -230,18 +230,51 @@ export default function PropertyForm({
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState(1);
   const [editingSections, setEditingSections] = useState<Record<string, boolean>>({});
+  const [toast, setToast] = useState<{msg: string, type: 'error'|'success'} | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{message: string, confirmText?: string, onConfirm: () => void} | null>(null);
+
+  const showToast = (msg: string, type: 'error' | 'success' = 'error') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   const toggleEdit = async (section: string) => {
     if (editingSections[section]) {
       // It was in edit mode, user clicked "Save"
+      
+      const required = [
+        { key: "category", name: "Property Type" },
+        { key: "listing_type", name: "Listing Type" },
+        { key: "province", name: "Province" },
+        { key: "district", name: "District" },
+        { key: "city", name: "City / Town" },
+        { key: "title", name: "Title" },
+        { key: "slug", name: "Slug" },
+        { key: "short_description", name: "Short Description" },
+        { key: "description", name: "Description" },
+      ];
+      const partialPayload = getSectionPayload(section);
+      let missing: string[] = [];
+      for (const req of required) {
+        if (partialPayload.hasOwnProperty(req.key) || (section === 'location' && (req.key === 'province' || req.key === 'district' || req.key === 'city'))) {
+          if (!values[req.key as keyof PropertyFormValues]) {
+            missing.push(req.name);
+          }
+        }
+      }
+      if (missing.length > 0) {
+        showToast(`Please fill in all required fields: ${missing.join(", ")}`);
+        return;
+      }
+
       if (propertyId) {
         try {
           setSaving(true);
-          const partialPayload = getSectionPayload(section);
           await adminJSON(`/properties/${propertyId}`, { method: "PATCH", body: JSON.stringify(partialPayload) });
           setSaving(false);
+          showToast("Section updated successfully", "success");
         } catch (e: any) {
-          alert(e.message);
+          showToast(e.message);
           setSaving(false);
           return;
         }
@@ -281,15 +314,16 @@ export default function PropertyForm({
           }))
         }) 
       });
+      showToast("Documents saved successfully", "success");
     } catch (e: any) {
-      alert("Failed to save documents: " + e.message);
+      showToast("Failed to save documents: " + e.message);
     } finally {
       setSaving(false);
     }
   }
 
   async function addOrUpdateDocument() {
-    if (!docForm.title || !docForm.file_url) return alert("Title and URL required");
+    if (!docForm.title || !docForm.file_url) return showToast("Title and URL required");
     let newDocs = [...values.documents];
     if (editingDocIndex !== null) {
       newDocs[editingDocIndex] = docForm;
@@ -310,10 +344,15 @@ export default function PropertyForm({
   }
 
   async function removeDocument(index: number) {
-    if (!window.confirm("Are you sure you want to remove this document? This cannot be undone.")) return;
-    const newDocs = values.documents.filter((_, i) => i !== index);
-    setValues(prev => ({ ...prev, documents: newDocs }));
-    await saveDocsToBackend(newDocs);
+    setConfirmModal({
+      message: "Are you sure you want to remove this document? This cannot be undone.",
+      confirmText: "Yes, remove",
+      onConfirm: async () => {
+        const newDocs = values.documents.filter((_, i) => i !== index);
+        setValues(prev => ({ ...prev, documents: newDocs }));
+        await saveDocsToBackend(newDocs);
+      }
+    });
   }
 
   function removeCoverImage() {
@@ -466,13 +505,39 @@ export default function PropertyForm({
     setSaving(true);
     setError(null);
     setFieldErrors({});
+
+    const required = [
+      { key: "category", name: "Property Type" },
+      { key: "listing_type", name: "Listing Type" },
+      { key: "province", name: "Province" },
+      { key: "district", name: "District" },
+      { key: "city", name: "City / Town" },
+      { key: "title", name: "Title" },
+      { key: "slug", name: "Slug" },
+      { key: "short_description", name: "Short Description" },
+      { key: "description", name: "Description" },
+    ];
+    let missing: string[] = [];
+    for (const req of required) {
+      if (!values[req.key as keyof PropertyFormValues]) {
+        missing.push(req.name);
+      }
+    }
+    if (missing.length > 0) {
+      setError(`Please fill in all required fields: ${missing.join(", ")}`);
+      setSaving(false);
+      return;
+    }
+
     try {
       if (propertyId) {
         await adminJSON(`/properties/${propertyId}`, { method: "PATCH", body: JSON.stringify(toPayload()) });
-        router.push("/admin/properties");
+        showToast("Property updated successfully!", "success");
+        setTimeout(() => router.push("/admin/properties"), 1000);
       } else {
         const res = await adminJSON<{ id: string }>("/properties", { method: "POST", body: JSON.stringify(toPayload()) });
-        router.push(`/admin/properties/${res.id}/edit`);
+        showToast("Draft created successfully!", "success");
+        setTimeout(() => router.push(`/admin/properties/${res.id}/edit`), 1000);
       }
     } catch (err: any) {
       setError(err.message || "Failed to save property");
@@ -486,9 +551,10 @@ export default function PropertyForm({
       navigator.geolocation.getCurrentPosition((position) => {
         set("latitude", position.coords.latitude.toString());
         set("longitude", position.coords.longitude.toString());
-      }, () => alert("Could not access your location. Please check browser permissions."));
+        showToast("Location updated", "success");
+      }, () => showToast("Could not access your location. Please check browser permissions."));
     } else {
-      alert("Geolocation is not supported by your browser");
+      showToast("Geolocation is not supported by your browser");
     }
   }
 
@@ -508,8 +574,40 @@ export default function PropertyForm({
   };
 
   return (
-    <form onSubmit={onSubmit} className="max-w-6xl space-y-8 text-sm" noValidate>
-      {error && <div className="border border-red-300 bg-red-50 p-3 text-red-700">{error}</div>}
+    <>
+      {confirmModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity">
+          <div className="bg-white border border-stone-200 p-6 rounded-xl shadow-2xl w-[400px] max-w-[90vw] animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-medium text-ink mb-6">{confirmModal.message}</h3>
+            <div className="flex justify-end gap-3">
+              <button 
+                type="button"
+                onClick={() => setConfirmModal(null)}
+                className="px-5 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg text-sm font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                type="button"
+                onClick={() => {
+                  confirmModal.onConfirm();
+                  setConfirmModal(null);
+                }}
+                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                {confirmModal.confirmText || "Yes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-[9999] px-6 py-3 shadow-xl rounded-sm text-sm font-medium transition-all animate-in fade-in slide-in-from-top-4 ${toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-[#2B8B45] text-white'}`}>
+          {toast.msg}
+        </div>
+      )}
+      <form onSubmit={onSubmit} className="max-w-6xl space-y-8 text-sm" noValidate>
+        {error && <div className="border border-red-300 bg-red-50 p-3 text-red-700">{error}</div>}
 
       {/* STEPPER */}
       <div className="flex items-center justify-between mb-8 relative px-4">
@@ -831,7 +929,7 @@ export default function PropertyForm({
         <Section id="ad_details"  title="Ad Details" propertyId={propertyId} isEditing={editingSections["ad_details"]} saving={saving} toggleEdit={toggleEdit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block sm:col-span-2">
-              <span className="mb-1 block text-xs text-ink-soft">Title</span>
+              <span className="mb-1 block text-xs text-ink-soft">Title *</span>
               <input maxLength={160} value={values.title} onChange={(e) => {
                 const newTitle = e.target.value;
                 set("title", newTitle);
@@ -841,15 +939,15 @@ export default function PropertyForm({
               }} className="w-full border border-stone-line px-3 py-2" />
             </label>
             <label className="block sm:col-span-2">
-              <span className="mb-1 block text-xs text-ink-soft">Slug (Unique Auto-generated)</span>
+              <span className="mb-1 block text-xs text-ink-soft">Slug (Unique Auto-generated) *</span>
               <input value={values.slug} onChange={(e) => set("slug", e.target.value)} className="w-full border border-stone-line px-3 py-2 font-mono text-xs bg-stone-50" />
             </label>
             <label className="block sm:col-span-2">
-              <span className="mb-1 block text-xs text-ink-soft">Short Description (max 300 chars)</span>
+              <span className="mb-1 block text-xs text-ink-soft">Short Description (max 300 chars Display for the small Cards) *</span>
               <textarea maxLength={300} rows={2} value={values.short_description} onChange={(e) => set("short_description", e.target.value)} className="w-full border border-stone-line px-3 py-2" />
             </label>
             <label className="block sm:col-span-2">
-              <span className="mb-1 block text-xs text-ink-soft">Description</span>
+              <span className="mb-1 block text-xs text-ink-soft">Description *</span>
               <textarea rows={5} value={values.description} onChange={(e) => set("description", e.target.value)} className="w-full border border-stone-line px-3 py-2" />
             </label>
           </div>
@@ -1010,7 +1108,7 @@ export default function PropertyForm({
           <div className="flex items-center gap-4">
             <span>Media & SEO</span>
             <span className={`text-xs font-medium px-2 py-1 rounded-full ${canPublish ? 'bg-green-100 text-green-700' : 'bg-stone-200 text-stone-600'}`}>
-              Images ({totalImages}/3 min) to be able publish
+              Images ({totalImages}/3 min) with cover photo to be able publish
             </span>
           </div>
         }>
@@ -1209,5 +1307,6 @@ export default function PropertyForm({
         </div>
       </div>
     </form>
+    </>
   );
 }

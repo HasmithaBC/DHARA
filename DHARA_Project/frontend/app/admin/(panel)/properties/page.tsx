@@ -40,6 +40,13 @@ export default function PropertiesListPage() {
   const [featuredFilter, setFeaturedFilter] = useState("");
   const [publishableFilter, setPublishableFilter] = useState("");
   const [sortBy, setSortBy] = useState("NEWEST");
+  const [toast, setToast] = useState<{msg: string, type: 'error'|'success'} | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{message: string, confirmText?: string, onConfirm: () => void} | null>(null);
+
+  const showToast = (msg: string, type: 'error' | 'success' = 'error') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   async function load() {
     try {
@@ -59,16 +66,26 @@ export default function PropertiesListPage() {
     try {
       await adminJSON(`/properties/${id}/status`, { method: "POST", body: JSON.stringify({ status }) });
       load();
+      showToast(`Property status updated to ${status}`, "success");
     } catch (e: any) {
-      alert(e.message);
+      showToast(e.message);
     }
   }
 
   async function duplicate(id: string) {
-    if (confirm("Do you need to duplicate the property?")) {
-      await adminJSON(`/properties/${id}/duplicate`, { method: "POST" });
-      load();
-    }
+    setConfirmModal({
+      message: "Do you need to duplicate the property?",
+      confirmText: "Yes, duplicate",
+      onConfirm: async () => {
+        try {
+          await adminJSON(`/properties/${id}/duplicate`, { method: "POST" });
+          load();
+          showToast("Property duplicated successfully", "success");
+        } catch (e: any) {
+          showToast(e.message);
+        }
+      }
+    });
   }
 
   async function toggleFeature(id: string, is_featured: boolean) {
@@ -76,16 +93,22 @@ export default function PropertiesListPage() {
       // Mock toggle API call - backend needs to support this directly or via PATCH
       await adminJSON(`/properties/${id}`, { method: "PATCH", body: JSON.stringify({ is_featured: !is_featured }) });
       load();
+      showToast(`Property is now ${!is_featured ? 'featured' : 'unfeatured'}`, "success");
     } catch (e: any) {
-      alert(e.message);
+      showToast(e.message);
     }
   }
 
   async function bulk(action: string) {
     if (selected.size === 0) return;
-    await adminJSON(`/properties/bulk`, { method: "POST", body: JSON.stringify({ ids: Array.from(selected), action }) });
-    setSelected(new Set());
-    load();
+    try {
+      await adminJSON(`/properties/bulk`, { method: "POST", body: JSON.stringify({ ids: Array.from(selected), action }) });
+      setSelected(new Set());
+      load();
+      showToast(`Bulk action '${action}' completed successfully`, "success");
+    } catch (e: any) {
+      showToast(e.message);
+    }
   }
 
   function toggle(id: string) {
@@ -103,7 +126,7 @@ export default function PropertiesListPage() {
       
       if (action === "Publish") {
         if ((r.image_count || 0) < 3) {
-           alert("Cannot publish: Need at least 3 images.");
+           showToast("Cannot publish: Need at least 3 images.");
            e.target.value = "";
            return;
         }
@@ -186,11 +209,41 @@ export default function PropertiesListPage() {
   if (guard.status !== "allowed") return <AccessDenied role={guard.role} />;
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="font-display text-2xl text-ink">Properties</h1>
-        <Link href="/admin/properties/new" className="btn-primary">+ New Property</Link>
-      </div>
+    <>
+      {confirmModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity">
+          <div className="bg-white border border-stone-200 p-6 rounded-xl shadow-2xl w-[400px] max-w-[90vw] animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-medium text-ink mb-6">{confirmModal.message}</h3>
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setConfirmModal(null)}
+                className="px-5 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg text-sm font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  confirmModal.onConfirm();
+                  setConfirmModal(null);
+                }}
+                className="px-5 py-2.5 bg-[#2B8B45] hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                {confirmModal.confirmText || "Yes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-[9999] px-6 py-3 shadow-xl rounded-sm text-sm font-medium transition-all animate-in fade-in slide-in-from-top-4 ${toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-[#2B8B45] text-white'}`}>
+          {toast.msg}
+        </div>
+      )}
+      <div className="p-8">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="font-display text-2xl text-ink">Properties</h1>
+          <Link href="/admin/properties/new" className="btn-primary">+ New Property</Link>
+        </div>
 
       {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
 
@@ -316,5 +369,6 @@ export default function PropertiesListPage() {
         </table>
       </div>
     </div>
+    </>
   );
 }
