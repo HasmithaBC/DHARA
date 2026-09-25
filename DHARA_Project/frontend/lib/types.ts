@@ -3,7 +3,7 @@ export interface PropertySummary {
   reference_code: string;
   title: string;
   slug: string;
-  category: "LAND" | "HOUSE" | "COMMERCIAL";
+  category: "LAND" | "HOUSE" | "COMMERCIAL" | "OTHER";
   listing_type: "SALE" | "RENT";
   status: string;
   is_featured: boolean;

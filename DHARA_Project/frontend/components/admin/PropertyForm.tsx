@@ -158,6 +158,34 @@ const PROVINCE_DISTRICTS: Record<string, string[]> = {
   "Western": ["Colombo", "Gampaha", "Kalutara"],
 };
 
+const DISTRICT_COORDS: Record<string, { lat: string, lng: string }> = {
+  "Ampara": { lat: "7.2965", lng: "81.6724" },
+  "Anuradhapura": { lat: "8.3114", lng: "80.4037" },
+  "Badulla": { lat: "6.9934", lng: "81.0550" },
+  "Batticaloa": { lat: "7.7170", lng: "81.6986" },
+  "Colombo": { lat: "6.9271", lng: "79.8612" },
+  "Galle": { lat: "6.0535", lng: "80.2210" },
+  "Gampaha": { lat: "7.0873", lng: "79.9996" },
+  "Hambantota": { lat: "6.1248", lng: "81.1185" },
+  "Jaffna": { lat: "9.6615", lng: "80.0255" },
+  "Kalutara": { lat: "6.5854", lng: "79.9607" },
+  "Kandy": { lat: "7.2906", lng: "80.6337" },
+  "Kegalle": { lat: "7.2513", lng: "80.3464" },
+  "Kilinochchi": { lat: "9.3803", lng: "80.3770" },
+  "Kurunegala": { lat: "7.4818", lng: "80.3609" },
+  "Mannar": { lat: "8.9810", lng: "79.9044" },
+  "Matale": { lat: "7.4675", lng: "80.6234" },
+  "Matara": { lat: "5.9549", lng: "80.5469" },
+  "Moneragala": { lat: "6.8728", lng: "81.3507" },
+  "Mullaitivu": { lat: "9.2671", lng: "80.8142" },
+  "Nuwara Eliya": { lat: "6.9497", lng: "80.7828" },
+  "Polonnaruwa": { lat: "7.9403", lng: "81.0188" },
+  "Puttalam": { lat: "8.0362", lng: "79.8283" },
+  "Ratnapura": { lat: "6.7056", lng: "80.3847" },
+  "Trincomalee": { lat: "8.5874", lng: "81.2152" },
+  "Vavuniya": { lat: "8.7542", lng: "80.4982" },
+};
+
 const empty: PropertyFormValues = {
   title: "", slug: "", category: "HOUSE", listing_type: "SALE", short_description: "", description: "",
 
@@ -378,9 +406,9 @@ export default function PropertyForm({
       listing_type: values.listing_type,
       short_description: values.short_description,
       description: values.description,
-      price_lkr: values.price_lkr ? Number(values.price_lkr) : null,
+      price_lkr: values.price_on_request ? null : (values.price_lkr ? Number(values.price_lkr) : null),
       price_on_request: values.price_on_request,
-      price_unit: values.price_unit,
+      price_unit: values.price_on_request ? null : (values.price_unit || null),
       is_negotiable: values.is_negotiable,
       rent_period: values.listing_type === "RENT" ? values.rent_period : null,
       minimum_lease_months: values.listing_type === "RENT" && values.minimum_lease_months ? Number(values.minimum_lease_months) : null,
@@ -398,8 +426,8 @@ export default function PropertyForm({
       land_area_unit: values.land_area_unit,
       land_area_count: values.land_area_count ? Number(values.land_area_count) : null,
       road_access: values.road_access,
-      road_width_ft: values.road_width_ft ? Number(values.road_width_ft) : null,
-      road_surface: values.road_surface || null,
+      road_width_ft: values.road_access && values.road_width_ft ? Number(values.road_width_ft) : null,
+      road_surface: values.road_access ? (values.road_surface || null) : null,
       land_shape: values.land_shape || null,
       frontage_ft: values.frontage_ft ? Number(values.frontage_ft) : null,
       land_type: values.land_type || null,
@@ -550,7 +578,14 @@ export default function PropertyForm({
               <span className="mb-2 block text-sm font-medium text-ink-soft">District *</span>
               <select
                 value={values.district}
-                onChange={(e) => set("district", e.target.value)}
+                onChange={(e) => {
+                  const d = e.target.value;
+                  set("district", d);
+                  if (!values.show_exact_location && DISTRICT_COORDS[d]) {
+                    set("latitude", DISTRICT_COORDS[d].lat);
+                    set("longitude", DISTRICT_COORDS[d].lng);
+                  }
+                }}
                 className="w-full border border-stone-line px-3 py-2.5"
                 disabled={!values.province}
               >
@@ -598,6 +633,7 @@ export default function PropertyForm({
             <LocationMap
               lat={Number(values.latitude) || 7.0}
               lng={Number(values.longitude) || 80.0}
+              readOnly={!values.show_exact_location}
               onChange={(lat, lng) => {
                 set("latitude", lat.toString());
                 set("longitude", lng.toString());
@@ -605,23 +641,46 @@ export default function PropertyForm({
             />
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-3 items-end">
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium text-ink-soft">Latitude</span>
-              <input value={values.latitude} onChange={(e) => set("latitude", e.target.value)} className="w-full border border-stone-line px-3 py-2" />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium text-ink-soft">Longitude</span>
-              <input value={values.longitude} onChange={(e) => set("longitude", e.target.value)} className="w-full border border-stone-line px-3 py-2" />
-            </label>
+          <div className="grid gap-6 sm:grid-cols-4 items-end">
             <button
               type="button"
-              onClick={getCurrentLocation}
-              className="w-full border border-stone-line bg-white px-3 py-2 flex items-center justify-center gap-2 hover:bg-stone-50"
+              onClick={() => {
+                const newShowExact = !values.show_exact_location;
+                set("show_exact_location", newShowExact);
+                if (!newShowExact && values.district && DISTRICT_COORDS[values.district]) {
+                  set("latitude", DISTRICT_COORDS[values.district].lat);
+                  set("longitude", DISTRICT_COORDS[values.district].lng);
+                }
+              }}
+              className={`w-full border px-3 py-2 flex items-center justify-center gap-2 font-medium transition-colors ${
+                values.show_exact_location 
+                  ? 'bg-[#2B8B45] border-[#2B8B45] text-white' 
+                  : 'bg-white border-stone-line text-stone-500 hover:bg-stone-50'
+              }`}
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
-              GET CURRENT LOCATION
+              📍 Show Exact Location
             </button>
+            
+            {values.show_exact_location && (
+              <>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-ink-soft">Latitude</span>
+                  <input value={values.latitude} onChange={(e) => set("latitude", e.target.value)} className="w-full border border-stone-line px-3 py-2" />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-ink-soft">Longitude</span>
+                  <input value={values.longitude} onChange={(e) => set("longitude", e.target.value)} className="w-full border border-stone-line px-3 py-2" />
+                </label>
+                <button
+                  type="button"
+                  onClick={getCurrentLocation}
+                  className="w-full border border-stone-line bg-white px-3 py-2 flex items-center justify-center gap-2 hover:bg-stone-50"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
+                  GET LOCATION
+                </button>
+              </>
+            )}
           </div>
         </Section>
 

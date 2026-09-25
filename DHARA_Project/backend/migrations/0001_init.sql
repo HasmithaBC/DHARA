@@ -5,7 +5,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- ---------- Enums ----------
-CREATE TYPE property_category   AS ENUM ('LAND','HOUSE','COMMERCIAL');
+CREATE TYPE property_category   AS ENUM ('LAND','HOUSE','COMMERCIAL','OTHER');
 CREATE TYPE listing_type        AS ENUM ('SALE','RENT');
 CREATE TYPE property_status     AS ENUM ('DRAFT','PUBLISHED','RESERVED','SOLD','RENTED','ARCHIVED');
 CREATE TYPE price_unit          AS ENUM ('TOTAL','PER_PERCH','PER_MONTH','PER_YEAR');
@@ -161,9 +161,6 @@ CREATE TABLE properties (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   view_count INT NOT NULL DEFAULT 0,
 
-  CONSTRAINT chk_land_extent CHECK (category <> 'LAND' OR land_area_count IS NOT NULL),
-  CONSTRAINT chk_built_area CHECK (category = 'LAND' OR built_area_sqft IS NOT NULL),
-  CONSTRAINT chk_rent_period CHECK (listing_type <> 'RENT' OR rent_period IS NOT NULL),
   CONSTRAINT chk_price CHECK (price_on_request = true OR price_lkr IS NOT NULL),
   CONSTRAINT chk_latlng CHECK (latitude BETWEEN 5.9 AND 9.9 AND longitude BETWEEN 79.5 AND 81.9)
 );

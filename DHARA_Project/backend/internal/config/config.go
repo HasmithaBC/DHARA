@@ -67,7 +67,7 @@ func Load() *Config {
 		SalesInboxEmail:  getEnv("SALES_INBOX_EMAIL", "sales@dharact.com"),
 		TurnstileSecret:  getEnv("TURNSTILE_SECRET", ""),
 		MediaUploadDir:   getEnv("MEDIA_UPLOAD_DIR", "./uploads"),
-		MaxImageBytes:    int64(getEnvInt("MAX_IMAGE_BYTES", 10*1024*1024)),
+		MaxImageBytes:    int64(getEnvInt("MAX_IMAGE_BYTES", 20*1024*1024)),
 		MaxPDFBytes:      int64(getEnvInt("MAX_PDF_BYTES", 20*1024*1024)),
 		SiteBaseURL:      getEnv("SITE_BASE_URL", "https://dharact.com"),
 		WhatsAppToken:    getEnv("WHATSAPP_BUSINESS_TOKEN", ""),

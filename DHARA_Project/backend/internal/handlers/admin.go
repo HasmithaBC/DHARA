@@ -161,18 +161,21 @@ func (h *AdminHandler) ListAllProperties(w http.ResponseWriter, r *http.Request)
 	if page < 1 {
 		page = 1
 	}
-	perPage := 20
+	perPage := 1000
 	offset := (page - 1) * perPage
 
 	rows, err := h.DB.Query(fmt.Sprintf(`
 		SELECT p.id, p.reference_code, p.title, p.slug, p.category, p.listing_type, p.status,
 		       p.is_featured, p.price_lkr, p.price_on_request, p.view_count, p.updated_at, p.sold_rented_at, p.created_at, p.published_at,
 			   (SELECT COUNT(*) FROM property_images WHERE property_id = p.id) as image_count,
+			   EXISTS(SELECT 1 FROM property_images WHERE property_id = p.id AND is_cover = true) as has_cover,
 			   COALESCE(u1.name, 'Unknown') as created_by_name,
-			   COALESCE(u2.name, 'Unknown') as updated_by_name
+			   COALESCE(u2.name, 'Unknown') as updated_by_name,
+			   COALESCE(d.name, '') as district_name
 		FROM properties p 
 		LEFT JOIN users u1 ON p.created_by = u1.id
 		LEFT JOIN users u2 ON p.updated_by = u2.id
+		LEFT JOIN districts d ON p.district_id = d.id
 		WHERE %s ORDER BY p.updated_at DESC LIMIT %d OFFSET %d`,
 		strings.Join(where, " AND "), perPage, offset), args...)
 	if err != nil {
@@ -184,9 +187,10 @@ func (h *AdminHandler) ListAllProperties(w http.ResponseWriter, r *http.Request)
 	for rows.Next() {
 		var p models.Property
 		var imageCount int
-		var createdByName, updatedByName string
+		var hasCover bool
+		var createdByName, updatedByName, districtName string
 		rows.Scan(&p.ID, &p.ReferenceCode, &p.Title, &p.Slug, &p.Category, &p.ListingType, &p.Status,
-			&p.IsFeatured, &p.PriceLKR, &p.PriceOnRequest, &p.ViewCount, &p.UpdatedAt, &p.SoldRentedAt, &p.CreatedAt, &p.PublishedAt, &imageCount, &createdByName, &updatedByName)
+			&p.IsFeatured, &p.PriceLKR, &p.PriceOnRequest, &p.ViewCount, &p.UpdatedAt, &p.SoldRentedAt, &p.CreatedAt, &p.PublishedAt, &imageCount, &hasCover, &createdByName, &updatedByName, &districtName)
 		
 		out = append(out, map[string]interface{}{
 			"id": p.ID, "reference_code": p.ReferenceCode, "title": p.Title, "slug": p.Slug,
@@ -194,7 +198,8 @@ func (h *AdminHandler) ListAllProperties(w http.ResponseWriter, r *http.Request)
 			"is_featured": p.IsFeatured, "price_lkr": p.PriceLKR, "price_on_request": p.PriceOnRequest,
 			"view_count": p.ViewCount, "updated_at": p.UpdatedAt, "sold_rented_at": p.SoldRentedAt,
 			"created_at": p.CreatedAt, "published_at": p.PublishedAt,
-			"image_count": imageCount, "created_by": createdByName, "updated_by": updatedByName,
+			"image_count": imageCount, "has_cover": hasCover, "created_by": createdByName, "updated_by": updatedByName,
+			"district_name": districtName,
 		})
 	}
 	httpx.JSON(w, 200, out)
@@ -429,6 +434,24 @@ func (h *AdminHandler) UpdateProperty(w http.ResponseWriter, r *http.Request) {
 		setClauses = append(setClauses, fmt.Sprintf("reference_code=$%d", argID))
 		args = append(args, newRefCode)
 		argID++
+
+		if cat == "LAND" && curCat != "LAND" {
+			nullFields := []string{"built_area_sqft", "bedrooms", "bathrooms", "floor_count", "parking_spaces", "year_built", "furnishing", "condition"}
+			for _, f := range nullFields {
+				if _, ok := payload[f]; !ok {
+					setClauses = append(setClauses, fmt.Sprintf("%s=NULL", f))
+				}
+			}
+		}
+
+		if listType == "SALE" && curListType != "SALE" {
+			nullFields := []string{"rent_period", "minimum_lease_months", "advance_months", "deposit_lkr"}
+			for _, f := range nullFields {
+				if _, ok := payload[f]; !ok {
+					setClauses = append(setClauses, fmt.Sprintf("%s=NULL", f))
+				}
+			}
+		}
 	}
 
 	if len(setClauses) > 0 {
@@ -485,9 +508,10 @@ func (h *AdminHandler) TransitionStatus(w http.ResponseWriter, r *http.Request) 
 
 	if req.Status == "PUBLISHED" {
 		var imgCount int
-		h.DB.QueryRow(`SELECT count(*) FROM property_images WHERE property_id=$1`, id).Scan(&imgCount)
-		if imgCount < 3 {
-			httpx.Error(w, 400, "VALIDATION_ERROR", "At least 3 images are required before publishing", nil)
+		var hasCover bool
+		h.DB.QueryRow(`SELECT count(*), EXISTS(SELECT 1 FROM property_images WHERE property_id=$1 AND is_cover=true) FROM property_images WHERE property_id=$1`, id).Scan(&imgCount, &hasCover)
+		if imgCount < 3 || !hasCover {
+			httpx.Error(w, 400, "VALIDATION_ERROR", "At least 3 images and a cover photo are required before publishing", nil)
 			return
 		}
 		h.DB.Exec(`UPDATE properties SET status=$1, published_at=COALESCE(published_at, now()), sold_rented_at=NULL, updated_at=now() WHERE id=$2`, req.Status, id)
@@ -505,10 +529,10 @@ func (h *AdminHandler) TransitionStatus(w http.ResponseWriter, r *http.Request) 
 func (h *AdminHandler) DuplicateProperty(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var seq int
-	var cat string
-	h.DB.QueryRow(`SELECT category FROM properties WHERE id=$1`, id).Scan(&cat)
-	h.DB.QueryRow(`SELECT count(*)+1 FROM properties`).Scan(&seq)
-	refCode := util.NextReferenceCode(cat, seq, false)
+	var cat, listingType string
+	h.DB.QueryRow(`SELECT category, listing_type FROM properties WHERE id=$1`, id).Scan(&cat, &listingType)
+	h.DB.QueryRow(`SELECT COALESCE(MAX(SPLIT_PART(reference_code, '-', 3)::integer), -1) + 1 FROM properties WHERE reference_code LIKE 'DHR-%-%'`).Scan(&seq)
+	refCode := util.NextReferenceCode(cat, seq, listingType == "RENT")
 	uid := h.userID(r)
 	var newId string
 
@@ -546,6 +570,12 @@ func (h *AdminHandler) DuplicateProperty(w http.ResponseWriter, r *http.Request)
 	h.DB.Exec(`
 		INSERT INTO property_images (property_id, url, alt_text, caption, sort_order, is_cover)
 		SELECT $1, url, alt_text, caption, sort_order, is_cover FROM property_images WHERE property_id=$2
+	`, newId, id)
+	
+	// Copy documents
+	h.DB.Exec(`
+		INSERT INTO property_documents (property_id, type, title, file_url, file_size_bytes, access, is_watermarked)
+		SELECT $1, type, title, file_url, file_size_bytes, access, is_watermarked FROM property_documents WHERE property_id=$2
 	`, newId, id)
 	
 	httpx.JSON(w, 200, map[string]string{"status": "duplicated", "id": newId})

@@ -23,6 +23,8 @@ interface AdminProperty {
   updated_by?: string;
   updated_at?: string;
   sold_rented_at?: string;
+  district_name?: string;
+  has_cover?: boolean;
 }
 
 export default function PropertiesListPage() {
@@ -30,12 +32,18 @@ export default function PropertiesListPage() {
   const [rows, setRows] = useState<AdminProperty[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
+  
+  const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [featuredFilter, setFeaturedFilter] = useState("");
+  const [publishableFilter, setPublishableFilter] = useState("");
+  const [sortBy, setSortBy] = useState("NEWEST");
 
   async function load() {
     try {
-      const qs = statusFilter ? `?status=${statusFilter}` : "";
-      const data = await adminJSON<AdminProperty[]>(`/properties${qs}`);
+      const data = await adminJSON<AdminProperty[]>(`/properties`);
       setRows(data);
     } catch (e: any) {
       setError(e.message);
@@ -45,7 +53,7 @@ export default function PropertiesListPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, []);
 
   async function transition(id: string, status: string) {
     try {
@@ -141,7 +149,7 @@ export default function PropertiesListPage() {
         <select onChange={handleSelect} className="border border-stone-line px-2 py-1 text-xs bg-stone-50">
           <option value="">{r.status}</option>
           {options.map(o => {
-            const isPublishDisabled = o === "Publish" && (r.image_count || 0) < 3;
+            const isPublishDisabled = o === "Publish" && ((r.image_count || 0) < 3 || !r.has_cover);
             return <option key={o} value={o} className={isPublishDisabled ? "text-stone-400" : ""}>{o}</option>;
           })}
         </select>
@@ -151,11 +159,35 @@ export default function PropertiesListPage() {
     );
   }
 
+  const filteredRows = rows.filter(r => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!r.title.toLowerCase().includes(q) && !r.reference_code.toLowerCase().includes(q)) return false;
+    }
+    if (statusFilter && r.status !== statusFilter) return false;
+    if (categoryFilter && r.category !== categoryFilter) return false;
+    if (typeFilter && r.listing_type !== typeFilter) return false;
+    if (featuredFilter === "FEATURED" && !r.is_featured) return false;
+    if (featuredFilter === "UNFEATURED" && r.is_featured) return false;
+    if (publishableFilter === "PUBLISHABLE" && ((r.image_count || 0) < 3 || !r.has_cover)) return false;
+    if (publishableFilter === "NOT_PUBLISHABLE" && ((r.image_count || 0) >= 3 && r.has_cover)) return false;
+    return true;
+  }).sort((a, b) => {
+    if (sortBy === "NEWEST") return (b.created_at ? new Date(b.created_at).getTime() : 0) - (a.created_at ? new Date(a.created_at).getTime() : 0);
+    if (sortBy === "OLDEST") return (a.created_at ? new Date(a.created_at).getTime() : 0) - (b.created_at ? new Date(b.created_at).getTime() : 0);
+    if (sortBy === "REF_ASC" || sortBy === "REF_DESC") {
+       const numA = parseInt(a.reference_code.split("-").pop() || "0") || 0;
+       const numB = parseInt(b.reference_code.split("-").pop() || "0") || 0;
+       return sortBy === "REF_ASC" ? numA - numB : numB - numA;
+    }
+    return 0;
+  });
+
   if (guard.status !== "allowed") return <AccessDenied role={guard.role} />;
 
   return (
     <div className="p-8">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-6">
         <h1 className="font-display text-2xl text-ink">Properties</h1>
         <Link href="/admin/properties/new" className="btn-primary">+ New Property</Link>
       </div>
@@ -164,7 +196,81 @@ export default function PropertiesListPage() {
 
 
 
-      <div className="mt-4 overflow-x-auto border border-stone-line bg-stone-paper">
+      <div className="mb-6 p-4 border border-stone-line bg-stone-paper grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="lg:col-span-2">
+          <label className="block text-xs font-medium text-ink-soft mb-1">Search</label>
+          <input 
+            type="text" 
+            placeholder="Search by Title or Ref No..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full border border-stone-line px-3 py-2 text-sm"
+          />
+        </div>
+        
+        <div>
+          <label className="block text-xs font-medium text-ink-soft mb-1">Status</label>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full border border-stone-line px-3 py-2 text-sm bg-white">
+            <option value="">All Statuses</option>
+            <option value="DRAFT">Draft</option>
+            <option value="PUBLISHED">Published</option>
+            <option value="RESERVED">Reserved</option>
+            <option value="SOLD">Sold</option>
+            <option value="RENTED">Rented</option>
+            <option value="ARCHIVED">Archived</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-ink-soft mb-1">Category</label>
+          <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="w-full border border-stone-line px-3 py-2 text-sm bg-white">
+            <option value="">All Categories</option>
+            <option value="LAND">Land</option>
+            <option value="HOUSE">House</option>
+            <option value="COMMERCIAL">Commercial</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-ink-soft mb-1">Type</label>
+          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="w-full border border-stone-line px-3 py-2 text-sm bg-white">
+            <option value="">All Types</option>
+            <option value="SALE">Sale</option>
+            <option value="RENT">Rent</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-ink-soft mb-1">Featured</label>
+          <select value={featuredFilter} onChange={e => setFeaturedFilter(e.target.value)} className="w-full border border-stone-line px-3 py-2 text-sm bg-white">
+            <option value="">All</option>
+            <option value="FEATURED">Featured</option>
+            <option value="UNFEATURED">Unfeatured</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-ink-soft mb-1">Publish Readiness</label>
+          <select value={publishableFilter} onChange={e => setPublishableFilter(e.target.value)} className="w-full border border-stone-line px-3 py-2 text-sm bg-white">
+            <option value="">All</option>
+            <option value="PUBLISHABLE">Can Publish (≥3 Images & Cover)</option>
+            <option value="NOT_PUBLISHABLE">Not Publishable (&lt;3 Images or No Cover)</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-ink-soft mb-1">Sort By</label>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="w-full border border-stone-line px-3 py-2 text-sm bg-white">
+            <option value="NEWEST">Newest First</option>
+            <option value="OLDEST">Oldest First</option>
+            <option value="REF_ASC">Ref No (Min-Max)</option>
+            <option value="REF_DESC">Ref No (Max-Min)</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto border border-stone-line bg-stone-paper">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-stone-line bg-stone-fog text-xs uppercase text-ink-soft">
             <tr>
@@ -177,7 +283,7 @@ export default function PropertiesListPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {filteredRows.map((r) => (
               <tr key={r.id} className={`border-b border-stone-line transition-opacity ${r.status === 'SOLD' || r.status === 'RENTED' ? 'opacity-60 bg-stone-50' : 'bg-white hover:bg-stone-50'}`}>
                 <td className="p-3 text-xs font-mono text-ink-soft align-top pt-4">{r.reference_code}</td>
                 <td className="p-3 align-top pt-4">
@@ -203,8 +309,8 @@ export default function PropertiesListPage() {
                 </td>
               </tr>
             ))}
-            {rows.length === 0 && (
-              <tr><td colSpan={6} className="p-6 text-center text-ink-soft">No properties yet.</td></tr>
+            {filteredRows.length === 0 && (
+              <tr><td colSpan={6} className="p-6 text-center text-ink-soft">No properties found matching your filters.</td></tr>
             )}
           </tbody>
         </table>
