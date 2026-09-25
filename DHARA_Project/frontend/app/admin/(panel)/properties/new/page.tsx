@@ -10,7 +10,6 @@ export default function NewPropertyPage() {
   return (
     <div className="p-8">
       <h1 className="font-display text-2xl text-ink">New Property</h1>
-      <p className="mt-1 text-sm text-ink-soft">Saved as a draft — publish once at least 3 images with alt text are added.</p>
       <div className="mt-6">
         <PropertyForm />
       </div>

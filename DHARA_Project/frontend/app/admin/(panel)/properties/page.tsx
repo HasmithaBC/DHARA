@@ -14,16 +14,16 @@ interface AdminProperty {
   status: string;
   is_featured: boolean;
   view_count: number;
+  
+  // Mocks for backend data not yet implemented
+  image_count?: number;
+  created_by?: string;
+  created_at?: string;
+  published_at?: string;
+  updated_by?: string;
+  updated_at?: string;
+  sold_rented_at?: string;
 }
-
-const transitions: Record<string, string[]> = {
-  DRAFT: ["PUBLISHED"],
-  PUBLISHED: ["RESERVED", "SOLD", "RENTED", "ARCHIVED", "DRAFT"],
-  RESERVED: ["PUBLISHED", "SOLD", "RENTED"],
-  SOLD: ["ARCHIVED"],
-  RENTED: ["ARCHIVED"],
-  ARCHIVED: [],
-};
 
 export default function PropertiesListPage() {
   const guard = useRoleGuard(["SALES_MANAGER", "ADMINISTRATOR"]);
@@ -57,8 +57,20 @@ export default function PropertiesListPage() {
   }
 
   async function duplicate(id: string) {
-    await adminJSON(`/properties/${id}/duplicate`, { method: "POST" });
-    load();
+    if (confirm("Do you need to duplicate the property?")) {
+      await adminJSON(`/properties/${id}/duplicate`, { method: "POST" });
+      load();
+    }
+  }
+
+  async function toggleFeature(id: string, is_featured: boolean) {
+    try {
+      // Mock toggle API call - backend needs to support this directly or via PATCH
+      await adminJSON(`/properties/${id}`, { method: "PATCH", body: JSON.stringify({ is_featured: !is_featured }) });
+      load();
+    } catch (e: any) {
+      alert(e.message);
+    }
   }
 
   async function bulk(action: string) {
@@ -76,6 +88,69 @@ export default function PropertiesListPage() {
     });
   }
 
+  function renderStatus(r: AdminProperty) {
+    const handleSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const action = e.target.value;
+      if (!action) return;
+      
+      if (action === "Publish") {
+        if ((r.image_count || 0) < 3) {
+           alert("Cannot publish: Need at least 3 images.");
+           e.target.value = "";
+           return;
+        }
+        transition(r.id, "PUBLISHED");
+      } else if (action === "Archive" || action === "Withdraw") {
+        transition(r.id, "ARCHIVED");
+      } else if (action === "Draft") {
+        transition(r.id, "DRAFT");
+      } else if (action === "Reserve") {
+        transition(r.id, "RESERVED");
+      } else if (action === "Sold") {
+        transition(r.id, "SOLD");
+      } else if (action === "Rented") {
+        transition(r.id, "RENTED");
+      } else if (action === "Release") {
+        transition(r.id, "PUBLISHED");
+      }
+      e.target.value = ""; 
+    };
+
+    let options: string[] = [];
+    if (r.status === "DRAFT") options = ["Publish", "Archive"];
+    else if (r.status === "PUBLISHED") options = ["Draft", "Reserve", "Withdraw", r.listing_type === "SALE" ? "Sold" : "Rented"];
+    else if (r.status === "RESERVED") options = ["Release", r.listing_type === "SALE" ? "Sold" : "Rented"];
+    else if (r.status === "SOLD" || r.status === "RENTED") options = ["Archive"];
+    else if (r.status === "ARCHIVED") options = ["Draft"];
+
+    let badge = null;
+    if (r.status === "RESERVED") badge = <span className="block mt-2 w-fit bg-yellow-100 text-yellow-800 px-1.5 py-0.5 text-[10px] rounded font-medium">Under Offer</span>;
+    else if (r.status === "SOLD") badge = <span className="block mt-2 w-fit bg-stone-300 text-stone-800 px-1.5 py-0.5 text-[10px] rounded font-medium">Sold</span>;
+    else if (r.status === "RENTED") badge = <span className="block mt-2 w-fit bg-stone-300 text-stone-800 px-1.5 py-0.5 text-[10px] rounded font-medium">Rented</span>;
+    
+    let countdown = null;
+    if (r.status === "SOLD" || r.status === "RENTED") {
+      const date = r.sold_rented_at ? new Date(r.sold_rented_at) : new Date();
+      const days = Math.floor((new Date().getTime() - date.getTime()) / (1000 * 3600 * 24));
+      const remaining = Math.max(0, 90 - days);
+      countdown = <span className="block mt-1 text-stone-500 font-medium text-[10px]">{remaining} days left before auto-archive</span>;
+    }
+
+    return (
+      <div>
+        <select onChange={handleSelect} className="border border-stone-line px-2 py-1 text-xs bg-stone-50">
+          <option value="">{r.status}</option>
+          {options.map(o => {
+            const isPublishDisabled = o === "Publish" && (r.image_count || 0) < 3;
+            return <option key={o} value={o} className={isPublishDisabled ? "text-stone-400" : ""}>{o}</option>;
+          })}
+        </select>
+        {badge}
+        {countdown}
+      </div>
+    );
+  }
+
   if (guard.status !== "allowed") return <AccessDenied role={guard.role} />;
 
   return (
@@ -87,64 +162,49 @@ export default function PropertiesListPage() {
 
       {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border border-stone-line px-2 py-1 text-sm">
-          <option value="">All Statuses</option>
-          {["DRAFT", "PUBLISHED", "RESERVED", "SOLD", "RENTED", "ARCHIVED"].map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        {selected.size > 0 && (
-          <div className="flex gap-2 text-xs">
-            <button onClick={() => bulk("feature")} className="btn-outline px-3 py-1">Feature</button>
-            <button onClick={() => bulk("unfeature")} className="btn-outline px-3 py-1">Unfeature</button>
-            <button onClick={() => bulk("archive")} className="btn-outline px-3 py-1">Archive</button>
-            <span className="self-center text-ink-soft">{selected.size} selected</span>
-          </div>
-        )}
-      </div>
+
 
       <div className="mt-4 overflow-x-auto border border-stone-line bg-stone-paper">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-stone-line bg-stone-fog text-xs uppercase text-ink-soft">
             <tr>
-              <th className="p-3"><input type="checkbox" onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())} /></th>
-              <th className="p-3">Reference</th>
+              <th className="p-3">Ref. No.</th>
               <th className="p-3">Title</th>
-              <th className="p-3">Category</th>
-              <th className="p-3">Type</th>
               <th className="p-3">Status</th>
-              <th className="p-3">Views</th>
-              <th className="p-3">Actions</th>
+              <th className="p-3">View Count</th>
+              <th className="p-3 min-w-[200px]">Info</th>
+              <th className="p-3">Action</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className="border-b border-stone-line">
-                <td className="p-3"><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} /></td>
-                <td className="p-3 text-xs text-ink-soft">{r.reference_code}</td>
-                <td className="p-3">
-                  <Link href={`/admin/properties/${r.id}/edit`} className="text-ink hover:underline">{r.title}</Link>
-                  {r.is_featured && <span className="ml-2 bg-brass px-1.5 py-0.5 text-[10px] text-ink">Featured</span>}
+              <tr key={r.id} className={`border-b border-stone-line transition-opacity ${r.status === 'SOLD' || r.status === 'RENTED' ? 'opacity-60 bg-stone-50' : 'bg-white hover:bg-stone-50'}`}>
+                <td className="p-3 text-xs font-mono text-ink-soft align-top pt-4">{r.reference_code}</td>
+                <td className="p-3 align-top pt-4">
+                  <Link href={`/admin/properties/${r.id}/edit`} className="text-ink font-medium hover:underline">{r.title}</Link>
+                  {r.is_featured && <span className="ml-2 bg-brass px-1.5 py-0.5 text-[10px] text-ink rounded">Featured</span>}
                 </td>
-                <td className="p-3">{r.category}</td>
-                <td className="p-3">{r.listing_type}</td>
-                <td className="p-3">
-                  <span className="bg-stone-fog px-2 py-1 text-xs">{r.status}</span>
+                <td className="p-3 align-top pt-3">
+                  {renderStatus(r)}
                 </td>
-                <td className="p-3">{r.view_count}</td>
-                <td className="p-3">
-                  <div className="flex flex-wrap gap-1">
-                    {(transitions[r.status] || []).map((s) => (
-                      <button key={s} onClick={() => transition(r.id, s)} className="border border-stone-line px-2 py-0.5 text-xs hover:bg-stone-fog">
-                        → {s}
-                      </button>
-                    ))}
-                    <button onClick={() => duplicate(r.id)} className="border border-stone-line px-2 py-0.5 text-xs hover:bg-stone-fog">Duplicate</button>
+                <td className="p-3 align-top pt-4">{r.view_count}</td>
+                <td className="p-3 text-xs text-ink-soft align-top pt-3 space-y-1">
+                  <div><span className="font-medium">Created:</span> {r.created_by || 'Admin'} <span className="text-[10px]">({r.created_at || 'Just now'})</span></div>
+                  <div><span className="font-medium">Published:</span> {r.published_at || 'Not yet'}</div>
+                  <div><span className="font-medium">Updated:</span> {r.updated_by || 'Admin'} <span className="text-[10px]">({r.updated_at || 'Just now'})</span></div>
+                </td>
+                <td className="p-3 align-top pt-3">
+                  <div className="flex flex-col items-start gap-1">
+                    <button onClick={() => duplicate(r.id)} className="border border-stone-line px-3 py-1 text-xs bg-white hover:bg-stone-fog">Duplicate</button>
+                    <button onClick={() => toggleFeature(r.id, r.is_featured)} className="border border-stone-line px-3 py-1 text-xs bg-white hover:bg-stone-fog">
+                      {r.is_featured ? 'Unfeature' : 'Feature'}
+                    </button>
                   </div>
                 </td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={8} className="p-6 text-center text-ink-soft">No properties yet.</td></tr>
+              <tr><td colSpan={6} className="p-6 text-center text-ink-soft">No properties yet.</td></tr>
             )}
           </tbody>
         </table>

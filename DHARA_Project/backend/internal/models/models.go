@@ -46,7 +46,7 @@ type PropertyImage struct {
 	PropertyID string `json:"property_id"`
 	URL        string `json:"url"`
 	AltText    string `json:"alt_text"`
-	Caption    string `json:"caption,omitempty"`
+	Caption    *string `json:"caption,omitempty"`
 	SortOrder  int    `json:"sort_order"`
 	IsCover    bool   `json:"is_cover"`
 }
@@ -87,15 +87,18 @@ type Property struct {
 
 	ProvinceID        int     `json:"province_id"`
 	DistrictID        int     `json:"district_id"`
-	CityID            int     `json:"city_id"`
+	City              *string `json:"city,omitempty"`
 	AddressLine       *string `json:"address_line,omitempty"`
+	MapURL            *string `json:"map_url,omitempty"`
 	ShowExactLocation bool    `json:"show_exact_location"`
 	Latitude          float64 `json:"latitude"`
 	Longitude         float64 `json:"longitude"`
 
-	LandExtentPerches *float64 `json:"land_extent_perches,omitempty"`
+	LandAreaUnit      *string  `json:"land_area_unit,omitempty"`
+	LandAreaCount     *float64 `json:"land_area_count,omitempty"`
 	LandShape         *string  `json:"land_shape,omitempty"`
-	RoadAccessFt      *int     `json:"road_access_ft,omitempty"`
+	RoadWidthFt       *int     `json:"road_width_ft,omitempty"`
+	RoadAccess        *bool    `json:"road_access,omitempty"`
 	RoadSurface       *string  `json:"road_surface,omitempty"`
 	FrontageFt        *int     `json:"frontage_ft,omitempty"`
 	LandType          *string  `json:"land_type,omitempty"`
@@ -103,26 +106,56 @@ type Property struct {
 	BuiltAreaSqft *int    `json:"built_area_sqft,omitempty"`
 	Bedrooms      *int    `json:"bedrooms,omitempty"`
 	Bathrooms     *int    `json:"bathrooms,omitempty"`
-	Floors        *int    `json:"floors,omitempty"`
+	FloorCount    *int    `json:"floor_count,omitempty"`
 	ParkingSpaces *int    `json:"parking_spaces,omitempty"`
 	YearBuilt     *int    `json:"year_built,omitempty"`
 	Furnishing    *string `json:"furnishing,omitempty"`
 	Condition     *string `json:"condition,omitempty"`
 
-	HasElectricity  *bool   `json:"has_electricity,omitempty"`
+	HasElectricity  *string `json:"has_electricity,omitempty"`
 	WaterSource     *string `json:"water_source,omitempty"`
 	DeedType        *string `json:"deed_type,omitempty"`
 	DeedNote        *string `json:"deed_note,omitempty"`
-	HasBoundaryWall *bool   `json:"has_boundary_wall,omitempty"`
-	HasSolar        *bool   `json:"has_solar,omitempty"`
-	ACReady         *bool   `json:"ac_ready,omitempty"`
+	HasBoundaryWall            *bool   `json:"has_boundary_wall,omitempty"`
+	HasSolar                   *bool   `json:"has_solar,omitempty"`
+	ACReady                    *bool   `json:"ac_ready,omitempty"`
+	BeachfrontSeaView          *bool   `json:"beachfront_sea_view,omitempty"`
+	WaterfrontRiverside        *bool   `json:"waterfront_riverside,omitempty"`
+	Hillside                   *bool   `json:"hillside,omitempty"`
+	PaddyFront                 *bool   `json:"paddy_front,omitempty"`
+	LakeFront                  *bool   `json:"lake_front,omitempty"`
+	IndoorGarden               *bool   `json:"indoor_garden,omitempty"`
+	Garage                     *bool   `json:"garage,omitempty"`
+	SwimmingPool               *bool   `json:"swimming_pool,omitempty"`
+	GatedCommunity             *bool   `json:"gated_community,omitempty"`
+	RoofTopGarden              *bool   `json:"roof_top_garden,omitempty"`
+	LawnGarden                 *bool   `json:"lawn_garden,omitempty"`
+	LuxurySpecification        *bool   `json:"luxury_specification,omitempty"`
+	Security24Hours            *bool   `json:"security_24_hours,omitempty"`
+	ColonialArchitecture       *bool   `json:"colonial_architecture,omitempty"`
+	MaidsRoom                  *bool   `json:"maids_room,omitempty"`
+	InfinityPool               *bool   `json:"infinity_pool,omitempty"`
+	HomeSecuritySystem         *bool   `json:"home_security_system,omitempty"`
+	MaidsToilet                *bool   `json:"maids_toilet,omitempty"`
+	HotWater                   *bool   `json:"hot_water,omitempty"`
+	OverheadWaterTank          *bool   `json:"overhead_water_tank,omitempty"`
+	AttachedToilets            *bool   `json:"attached_toilets,omitempty"`
+	PermitsForGemMining        *bool   `json:"permits_for_gem_mining,omitempty"`
+	SoilTestPassed             *bool   `json:"soil_test_passed,omitempty"`
+	HillyLandscape             *bool   `json:"hilly_landscape,omitempty"`
+	IdealForCommercialUse      *bool   `json:"ideal_for_commercial_use,omitempty"`
+	LakePondInsideLand         *bool   `json:"lake_pond_inside_land,omitempty"`
+	BungalowCottageType        *bool   `json:"bungalow_cottage_type,omitempty"`
+	StreamRunningThroughLand   *bool   `json:"stream_running_through_land,omitempty"`
+	ApprovedSurveyPlan         *bool   `json:"approved_survey_plan,omitempty"`
 
-	CoverImageID    *string `json:"cover_image_id,omitempty"`
 	VideoURL        *string `json:"video_url,omitempty"`
+	GoogleDriveURL  *string `json:"google_drive_url,omitempty"`
 	MetaTitle       *string `json:"meta_title,omitempty"`
 	MetaDescription *string `json:"meta_description,omitempty"`
 
-	PublishedAt *time.Time `json:"published_at,omitempty"`
+	PublishedAt  *time.Time `json:"published_at,omitempty"`
+	SoldRentedAt *time.Time `json:"sold_rented_at,omitempty"`
 	CreatedBy   string     `json:"created_by"`
 	UpdatedBy   string     `json:"updated_by"`
 	CreatedAt   time.Time  `json:"created_at"`
@@ -134,9 +167,6 @@ type Property struct {
 	Docs     []PropertyDocument `json:"documents,omitempty"`
 	Amenities []Amenity         `json:"amenities,omitempty"`
 	CoverURL string             `json:"cover_url,omitempty"`
-	District string             `json:"district_name,omitempty"`
-	City     string             `json:"city_name,omitempty"`
-	Province string             `json:"province_name,omitempty"`
 }
 
 type Lead struct {

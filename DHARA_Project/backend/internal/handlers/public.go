@@ -57,10 +57,10 @@ func (h *PublicHandler) ListProperties(w http.ResponseWriter, r *http.Request) {
 		add("p.price_lkr <= $%d", v)
 	}
 	if v := q.Get("perches_min"); v != "" {
-		add("p.land_extent_perches >= $%d", v)
+		add("p.land_area_count >= $%d", v)
 	}
 	if v := q.Get("perches_max"); v != "" {
-		add("p.land_extent_perches <= $%d", v)
+		add("p.land_area_count <= $%d", v)
 	}
 	if v := q.Get("sqft_min"); v != "" {
 		add("p.built_area_sqft >= $%d", v)
@@ -98,7 +98,7 @@ func (h *PublicHandler) ListProperties(w http.ResponseWriter, r *http.Request) {
 	case "price_desc":
 		sortCol = "p.price_on_request ASC, p.price_lkr DESC"
 	case "extent":
-		sortCol = "p.land_extent_perches DESC NULLS LAST"
+		sortCol = "p.land_area_count DESC NULLS LAST"
 	case "built_area":
 		sortCol = "p.built_area_sqft DESC NULLS LAST"
 	}
@@ -118,8 +118,8 @@ func (h *PublicHandler) ListProperties(w http.ResponseWriter, r *http.Request) {
 	var total int
 	countQuery := fmt.Sprintf(`
 		SELECT count(*) FROM properties p
-		JOIN provinces pr ON pr.id = p.province_id
-		JOIN districts d ON d.id = p.district_id
+		
+		
 		JOIN cities c ON c.id = p.city_id
 		WHERE %s`, whereSQL)
 	if err := h.DB.QueryRow(countQuery, args...).Scan(&total); err != nil {
@@ -131,12 +131,12 @@ func (h *PublicHandler) ListProperties(w http.ResponseWriter, r *http.Request) {
 	listQuery := fmt.Sprintf(`
 		SELECT p.id, p.reference_code, p.title, p.slug, p.category, p.listing_type, p.status,
 		       p.is_featured, p.short_description, p.price_lkr, p.price_on_request, p.price_unit,
-		       p.land_extent_perches, p.built_area_sqft, p.bedrooms, p.bathrooms,
+		       p.land_area_count, p.built_area_sqft, p.bedrooms, p.bathrooms,
 		       c.name, d.name,
 		       COALESCE((SELECT url FROM property_images pi WHERE pi.property_id = p.id AND pi.is_cover LIMIT 1), '')
 		FROM properties p
-		JOIN provinces pr ON pr.id = p.province_id
-		JOIN districts d ON d.id = p.district_id
+		
+		
 		JOIN cities c ON c.id = p.city_id
 		WHERE %s
 		ORDER BY %s
@@ -154,7 +154,7 @@ func (h *PublicHandler) ListProperties(w http.ResponseWriter, r *http.Request) {
 		var p models.Property
 		if err := rows.Scan(&p.ID, &p.ReferenceCode, &p.Title, &p.Slug, &p.Category, &p.ListingType,
 			&p.Status, &p.IsFeatured, &p.ShortDescription, &p.PriceLKR, &p.PriceOnRequest, &p.PriceUnit,
-			&p.LandExtentPerches, &p.BuiltAreaSqft, &p.Bedrooms, &p.Bathrooms, &p.City, &p.District, &p.CoverURL); err != nil {
+			&p.LandAreaCount, &p.BuiltAreaSqft, &p.Bedrooms, &p.Bathrooms, &p.City, &p.DistrictID, &p.ProvinceID, &p.CoverURL); err != nil {
 			continue
 		}
 		results = append(results, p)
@@ -176,14 +176,14 @@ func (h *PublicHandler) GetProperty(w http.ResponseWriter, r *http.Request) {
 		       p.address_line, p.show_exact_location,
 		       CASE WHEN p.show_exact_location THEN p.latitude ELSE round(p.latitude::numeric,2) END,
 		       CASE WHEN p.show_exact_location THEN p.longitude ELSE round(p.longitude::numeric,2) END,
-		       p.land_extent_perches, p.land_shape, p.road_access_ft, p.road_surface, p.frontage_ft, p.land_type,
-		       p.built_area_sqft, p.bedrooms, p.bathrooms, p.floors, p.parking_spaces, p.year_built,
+		       p.land_area_count, p.land_shape, p.road_width_ft, p.road_surface, p.frontage_ft, p.land_type,
+		       p.built_area_sqft, p.bedrooms, p.bathrooms, p.floor_count, p.parking_spaces, p.year_built,
 		       p.furnishing, p.condition, p.has_electricity, p.water_source, p.deed_type, p.deed_note,
-		       p.has_boundary_wall, p.has_solar, p.ac_ready, p.video_url, p.meta_title, p.meta_description,
-		       p.view_count, pr.name, d.name, c.name
+		       p.has_boundary_wall, p.has_solar, p.ac_ready, p.video_url, p.google_drive_url, p.meta_title, p.meta_description,
+		       p.view_count, p.province_id, p.district_id, c.name
 		FROM properties p
-		JOIN provinces pr ON pr.id = p.province_id
-		JOIN districts d ON d.id = p.district_id
+		
+		
 		JOIN cities c ON c.id = p.city_id
 		WHERE p.slug = $1 AND p.status <> 'DRAFT' AND p.status <> 'ARCHIVED'`, slug).Scan(
 		&p.ID, &p.ReferenceCode, &p.Title, &p.Slug, &p.Category, &p.ListingType, &p.Status,
@@ -191,11 +191,11 @@ func (h *PublicHandler) GetProperty(w http.ResponseWriter, r *http.Request) {
 		&p.PriceLKR, &p.PriceOnRequest, &p.PriceUnit, &p.IsNegotiable,
 		&p.RentPeriod, &p.MinimumLeaseMonths, &p.AdvanceMonths, &p.DepositLKR,
 		&p.AddressLine, &p.ShowExactLocation, &p.Latitude, &p.Longitude,
-		&p.LandExtentPerches, &p.LandShape, &p.RoadAccessFt, &p.RoadSurface, &p.FrontageFt, &p.LandType,
-		&p.BuiltAreaSqft, &p.Bedrooms, &p.Bathrooms, &p.Floors, &p.ParkingSpaces, &p.YearBuilt,
+		&p.LandAreaCount, &p.LandShape, &p.RoadWidthFt, &p.RoadSurface, &p.FrontageFt, &p.LandType,
+		&p.BuiltAreaSqft, &p.Bedrooms, &p.Bathrooms, &p.FloorCount, &p.ParkingSpaces, &p.YearBuilt,
 		&p.Furnishing, &p.Condition, &p.HasElectricity, &p.WaterSource, &p.DeedType, &p.DeedNote,
-		&p.HasBoundaryWall, &p.HasSolar, &p.ACReady, &p.VideoURL, &p.MetaTitle, &p.MetaDescription,
-		&p.ViewCount, &p.Province, &p.District, &p.City,
+		&p.HasBoundaryWall, &p.HasSolar, &p.ACReady, &p.VideoURL, &p.GoogleDriveURL, &p.MetaTitle, &p.MetaDescription,
+		&p.ViewCount, &p.ProvinceID, &p.DistrictID, &p.City,
 	)
 	if err == sql.ErrNoRows {
 		// ARCHIVED listings return 410 Gone per §4.3 / NFR-SEO-008
@@ -238,8 +238,8 @@ func (h *PublicHandler) GetProperty(w http.ResponseWriter, r *http.Request) {
 	}
 	amRows.Close()
 
-	if p.LandExtentPerches != nil {
-		p.MetaDescription = strPtr(util.LandExtentDisplay(*p.LandExtentPerches))
+	if p.LandAreaCount != nil {
+		p.MetaDescription = strPtr(util.LandExtentDisplay(*p.LandAreaCount))
 	}
 
 	httpx.JSON(w, 200, p)
@@ -286,29 +286,23 @@ func (h *PublicHandler) SimilarProperties(w http.ResponseWriter, r *http.Request
 	for rows.Next() {
 		var p models.Property
 		rows.Scan(&p.ID, &p.ReferenceCode, &p.Title, &p.Slug, &p.Category, &p.ListingType,
-			&p.ShortDescription, &p.PriceLKR, &p.PriceOnRequest, &p.City, &p.District, &p.CoverURL)
+			&p.ShortDescription, &p.PriceLKR, &p.PriceOnRequest, &p.City, &p.DistrictID, &p.ProvinceID, &p.CoverURL)
 		results = append(results, p)
 	}
 	httpx.JSON(w, 200, results)
 }
 
-// GET /api/v1/locations — Province → District → City tree (Appendix B).
+// GET /api/v1/locations
 func (h *PublicHandler) Locations(w http.ResponseWriter, r *http.Request) {
-	type cityJSON struct {
+	type districtJSON struct {
 		ID   int    `json:"id"`
 		Name string `json:"name"`
-	}
-	type districtJSON struct {
-		ID     int        `json:"id"`
-		Name   string     `json:"name"`
-		Cities []cityJSON `json:"cities"`
 	}
 	type provinceJSON struct {
 		ID        int            `json:"id"`
 		Name      string         `json:"name"`
 		Districts []districtJSON `json:"districts"`
 	}
-
 	provinces := []provinceJSON{}
 	pRows, _ := h.DB.Query(`SELECT id, name FROM provinces ORDER BY name`)
 	for pRows.Next() {
@@ -318,13 +312,6 @@ func (h *PublicHandler) Locations(w http.ResponseWriter, r *http.Request) {
 		for dRows.Next() {
 			var d districtJSON
 			dRows.Scan(&d.ID, &d.Name)
-			cRows, _ := h.DB.Query(`SELECT id, name FROM cities WHERE district_id=$1 ORDER BY name`, d.ID)
-			for cRows.Next() {
-				var c cityJSON
-				cRows.Scan(&c.ID, &c.Name)
-				d.Cities = append(d.Cities, c)
-			}
-			cRows.Close()
 			pv.Districts = append(pv.Districts, d)
 		}
 		dRows.Close()

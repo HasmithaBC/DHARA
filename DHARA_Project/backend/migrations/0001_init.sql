@@ -36,13 +36,6 @@ CREATE TABLE districts (
   UNIQUE(province_id, name)
 );
 
-CREATE TABLE cities (
-  id SERIAL PRIMARY KEY,
-  district_id INT NOT NULL REFERENCES districts(id),
-  name VARCHAR(80) NOT NULL,
-  UNIQUE(district_id, name)
-);
-
 -- ---------- Users / RBAC ----------
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -90,17 +83,20 @@ CREATE TABLE properties (
   advance_months INT,
   deposit_lkr NUMERIC(15,2),
 
-  province_id INT NOT NULL REFERENCES provinces(id),
-  district_id INT NOT NULL REFERENCES districts(id),
-  city_id INT NOT NULL REFERENCES cities(id),
+  city VARCHAR(100),
+  province_id INT REFERENCES provinces(id),
+  district_id INT REFERENCES districts(id),
   address_line VARCHAR(255),
+  map_url TEXT,
   show_exact_location BOOLEAN NOT NULL DEFAULT false,
   latitude NUMERIC(9,6) NOT NULL,
   longitude NUMERIC(9,6) NOT NULL,
 
-  land_extent_perches NUMERIC(10,2),
+  land_area_unit VARCHAR(20),
+  land_area_count NUMERIC(10,2),
   land_shape VARCHAR(40),
-  road_access_ft INT,
+  road_access BOOLEAN,
+  road_width_ft INT,
   road_surface road_surface,
   frontage_ft INT,
   land_type land_type,
@@ -108,33 +104,64 @@ CREATE TABLE properties (
   built_area_sqft INT,
   bedrooms INT,
   bathrooms INT,
-  floors INT,
+  floor_count INT,
   parking_spaces INT,
   year_built INT,
   furnishing furnishing_type,
   condition condition_type,
 
-  has_electricity BOOLEAN,
+  has_electricity VARCHAR(20),
   water_source water_source_type,
   deed_type deed_type,
   deed_note VARCHAR(255),
   has_boundary_wall BOOLEAN,
   has_solar BOOLEAN,
   ac_ready BOOLEAN,
+  beachfront_sea_view BOOLEAN,
+  waterfront_riverside BOOLEAN,
+  hillside BOOLEAN,
+  paddy_front BOOLEAN,
+  lake_front BOOLEAN,
+  indoor_garden BOOLEAN,
+  garage BOOLEAN,
+  swimming_pool BOOLEAN,
+  gated_community BOOLEAN,
+  roof_top_garden BOOLEAN,
+  lawn_garden BOOLEAN,
+  luxury_specification BOOLEAN,
+  security_24_hours BOOLEAN,
+  colonial_architecture BOOLEAN,
+  maids_room BOOLEAN,
+  infinity_pool BOOLEAN,
+  home_security_system BOOLEAN,
+  maids_toilet BOOLEAN,
+  hot_water BOOLEAN,
+  overhead_water_tank BOOLEAN,
+  attached_toilets BOOLEAN,
+  permits_for_gem_mining BOOLEAN,
+  soil_test_passed BOOLEAN,
+  hilly_landscape BOOLEAN,
+  ideal_for_commercial_use BOOLEAN,
+  lake_pond_inside_land BOOLEAN,
+  bungalow_cottage_type BOOLEAN,
+  stream_running_through_land BOOLEAN,
+  approved_survey_plan BOOLEAN,
 
-  cover_image_id UUID,
+  
   video_url VARCHAR(255),
+  google_drive_url VARCHAR(255),
   meta_title VARCHAR(60),
   meta_description VARCHAR(160),
 
   published_at TIMESTAMPTZ,
+  sold_rented_at TIMESTAMPTZ,
   created_by UUID NOT NULL REFERENCES users(id),
   updated_by UUID NOT NULL REFERENCES users(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   view_count INT NOT NULL DEFAULT 0,
 
-  CONSTRAINT chk_land_extent CHECK (category <> 'LAND' OR land_extent_perches IS NOT NULL),
+  CONSTRAINT chk_land_extent CHECK (category <> 'LAND' OR land_area_count IS NOT NULL),
   CONSTRAINT chk_built_area CHECK (category = 'LAND' OR built_area_sqft IS NOT NULL),
   CONSTRAINT chk_rent_period CHECK (listing_type <> 'RENT' OR rent_period IS NOT NULL),
   CONSTRAINT chk_price CHECK (price_on_request = true OR price_lkr IS NOT NULL),
@@ -142,9 +169,9 @@ CREATE TABLE properties (
 );
 
 CREATE INDEX idx_properties_search ON properties (status, category, listing_type);
-CREATE INDEX idx_properties_location ON properties (district_id, city_id);
+CREATE INDEX idx_properties_location ON properties (district_id, city);
 CREATE INDEX idx_properties_price ON properties (price_lkr);
-CREATE INDEX idx_properties_extent ON properties (land_extent_perches);
+CREATE INDEX idx_properties_extent ON properties (land_area_count);
 CREATE INDEX idx_properties_beds ON properties (bedrooms);
 CREATE INDEX idx_properties_title_trgm ON properties USING GIN (title gin_trgm_ops);
 
@@ -157,7 +184,7 @@ CREATE TABLE property_amenities (
 CREATE TABLE property_images (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
-  url VARCHAR(500) NOT NULL,
+  url TEXT NOT NULL,
   alt_text VARCHAR(200) NOT NULL,
   caption VARCHAR(200),
   sort_order INT NOT NULL DEFAULT 0,
@@ -165,14 +192,14 @@ CREATE TABLE property_images (
   is_cover BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-ALTER TABLE properties ADD CONSTRAINT fk_cover_image FOREIGN KEY (cover_image_id) REFERENCES property_images(id);
+
 
 CREATE TABLE property_documents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
   type document_type NOT NULL,
   title VARCHAR(160) NOT NULL,
-  file_url VARCHAR(500) NOT NULL,
+  file_url TEXT NOT NULL,
   file_size_bytes BIGINT,
   access document_access NOT NULL DEFAULT 'PUBLIC',
   is_watermarked BOOLEAN NOT NULL DEFAULT false,
@@ -196,7 +223,7 @@ CREATE TABLE leads (
   status lead_status NOT NULL DEFAULT 'NEW',
   assigned_to UUID REFERENCES users(id),
   internal_notes TEXT,
-  source_url VARCHAR(500),
+  source_url TEXT,
   utm_source VARCHAR(120), utm_medium VARCHAR(120), utm_campaign VARCHAR(120),
   ip_address VARCHAR(64),
   user_agent VARCHAR(255),
@@ -216,7 +243,7 @@ CREATE TABLE services (
   summary VARCHAR(300),
   body TEXT,
   icon VARCHAR(80),
-  hero_image VARCHAR(500),
+  hero_image TEXT,
   sort_order INT NOT NULL DEFAULT 0,
   is_published BOOLEAN NOT NULL DEFAULT true,
   meta_title VARCHAR(60), meta_description VARCHAR(160),
@@ -233,7 +260,7 @@ CREATE TABLE projects (
   location VARCHAR(160),
   year_completed INT,
   scope TEXT, challenge TEXT, solution TEXT, body TEXT,
-  cover_image VARCHAR(500),
+  cover_image TEXT,
   gallery JSONB NOT NULL DEFAULT '[]',
   boq_metrics JSONB NOT NULL DEFAULT '{}',
   is_featured BOOLEAN NOT NULL DEFAULT false,

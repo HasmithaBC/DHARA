@@ -112,12 +112,15 @@ func FormatPriceLKR(amount float64) string {
 
 // NextReferenceCode implements Appendix D: DHR-{C}-{NNNN}, with -R suffix for rentals.
 func NextReferenceCode(category string, seq int, isRent bool) string {
-	code := map[string]string{"LAND": "L", "HOUSE": "H", "COMMERCIAL": "C"}[category]
-	ref := fmt.Sprintf("DHR-%s-%04d", code, seq)
-	if isRent {
-		ref += "-R"
+	catCode, ok := map[string]string{"LAND": "L", "HOUSE": "H", "COMMERCIAL": "C"}[category]
+	if !ok {
+		catCode = "O"
 	}
-	return ref
+	typeCode := "S"
+	if isRent {
+		typeCode = "R"
+	}
+	return fmt.Sprintf("DHR-%s%s-%d", catCode, typeCode, seq)
 }
 
 // SignDownloadURL produces an HMAC-signed, time-limited token for gated document
