@@ -64,13 +64,13 @@ CREATE TABLE amenities (
 CREATE TABLE properties (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   reference_code VARCHAR(24) NOT NULL UNIQUE,
-  title VARCHAR(160) NOT NULL,
+  title VARCHAR(100) NOT NULL,
   slug VARCHAR(180) NOT NULL UNIQUE,
   category property_category NOT NULL,
   listing_type listing_type NOT NULL,
   status property_status NOT NULL DEFAULT 'DRAFT',
   is_featured BOOLEAN NOT NULL DEFAULT false,
-  short_description VARCHAR(300) NOT NULL,
+  short_description VARCHAR(160) NOT NULL,
   description TEXT NOT NULL DEFAULT '',
 
   price_lkr NUMERIC(15,2),
@@ -113,7 +113,7 @@ CREATE TABLE properties (
   has_electricity VARCHAR(20),
   water_source water_source_type,
   deed_type deed_type,
-  deed_note VARCHAR(255),
+  deed_note VARCHAR(300),
   has_boundary_wall BOOLEAN,
   has_solar BOOLEAN,
   ac_ready BOOLEAN,
@@ -150,7 +150,7 @@ CREATE TABLE properties (
   
   video_url VARCHAR(255),
   google_drive_url VARCHAR(255),
-  meta_title VARCHAR(60),
+  meta_title VARCHAR(100),
   meta_description VARCHAR(160),
 
   published_at TIMESTAMPTZ,

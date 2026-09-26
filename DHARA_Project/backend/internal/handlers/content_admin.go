@@ -29,6 +29,10 @@ func (h *AdminHandler) ListServicesAdmin(w http.ResponseWriter, r *http.Request)
 		rows.Scan(&s.ID, &s.Slug, &s.Title, &s.Summary, &s.Icon, &s.HeroImage, &s.SortOrder, &s.IsPublished)
 		out = append(out, s)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate services", nil)
+		return
+	}
 	httpx.JSON(w, 200, out)
 }
 
@@ -110,6 +114,10 @@ func (h *AdminHandler) ListProjectsAdmin(w http.ResponseWriter, r *http.Request)
 		var p row
 		rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Sector, &p.Location, &p.YearCompleted, &p.CoverImage, &p.IsFeatured, &p.IsPublished)
 		out = append(out, p)
+	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate projects", nil)
+		return
 	}
 	httpx.JSON(w, 200, out)
 }
@@ -201,6 +209,10 @@ func (h *AdminHandler) ListTestimonialsAdmin(w http.ResponseWriter, r *http.Requ
 		var t row
 		rows.Scan(&t.ID, &t.AuthorName, &t.AuthorLocation, &t.Quote, &t.Rating, &t.IsPublished, &t.SortOrder)
 		out = append(out, t)
+	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate testimonials", nil)
+		return
 	}
 	httpx.JSON(w, 200, out)
 }

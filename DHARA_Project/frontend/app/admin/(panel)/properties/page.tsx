@@ -337,7 +337,7 @@ export default function PropertiesListPage() {
           </thead>
           <tbody>
             {filteredRows.map((r) => (
-              <tr key={r.id} className={`border-b border-stone-line transition-opacity ${r.status === 'SOLD' || r.status === 'RENTED' ? 'opacity-60 bg-stone-50' : 'bg-white hover:bg-stone-50'}`}>
+              <tr key={r.id} className={`border-b border-stone-line transition-opacity ${r.status === 'SOLD' || r.status === 'RENTED' || r.status === 'ARCHIVED' ? 'opacity-60 bg-stone-50' : 'bg-white hover:bg-stone-50'}`}>
                 <td className="p-3 text-xs font-mono text-ink-soft align-top pt-4">{r.reference_code}</td>
                 <td className="p-3 align-top pt-4">
                   <Link href={`/admin/properties/${r.id}/edit`} className="text-ink font-medium hover:underline">{r.title}</Link>

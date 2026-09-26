@@ -6,12 +6,14 @@ import { useEffect, useState } from "react";
 import { clearTokens, getRole, getToken } from "@/lib/admin-api";
 import { ADMIN_NAV, AdminRole } from "@/lib/admin-guard";
 import { useIdleLogout } from "@/lib/use-idle-logout";
+import SignOutModal from "@/components/SignOutModal";
 
 export default function PanelLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [role, setRoleState] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [showSignOutModal, setShowSignOutModal] = useState(false);
 
   // FR-ADM-001: sign out after 60 minutes of inactivity.
   useIdleLogout();
@@ -50,10 +52,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
             </Link>
           ))}
           <button
-            onClick={() => {
-              clearTokens();
-              router.replace("/admin");
-            }}
+            onClick={() => setShowSignOutModal(true)}
             className="mt-4 block w-full px-3 py-2 text-left text-ink-soft hover:bg-stone-fog"
           >
             Sign out
@@ -61,6 +60,16 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
         </nav>
       </aside>
       <main className="min-w-0 flex-1 bg-stone-fog">{children}</main>
+
+      <SignOutModal
+        isOpen={showSignOutModal}
+        onClose={() => setShowSignOutModal(false)}
+        onConfirm={() => {
+          clearTokens();
+          setShowSignOutModal(false);
+          router.replace("/admin");
+        }}
+      />
     </div>
   );
 }

@@ -22,7 +22,6 @@ func NewAuthHandler(db *sql.DB, cfg *config.Config) *AuthHandler {
 
 const (
 	maxFailedAttempts = 5
-	lockoutWindow     = 15 * time.Minute
 	lockoutDuration   = 30 * time.Minute
 )
 

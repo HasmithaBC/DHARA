@@ -87,9 +87,16 @@ export default async function PropertyDetailView({ slug }: { slug: string }) {
             {property.images?.[0] && (
               <SmartMedia src={property.images[0].url} alt={property.images[0].alt_text} className="object-cover" priority />
             )}
-            <span className="absolute left-3 top-3 bg-ink px-2 py-1 text-xs text-stone-paper">
-              {property.status.replace("_", " ")}
-            </span>
+            {property.status === "RESERVED" && (
+              <span className="absolute left-3 top-3 bg-brass-dark px-3 py-1 text-xs text-white shadow-md">
+                Under Offer
+              </span>
+            )}
+            {(property.status === "SOLD" || property.status === "RENTED") && (
+              <span className="absolute left-3 top-3 bg-ink px-3 py-1 text-xs text-white shadow-md">
+                {property.status === "SOLD" ? "Sold" : "Rented"}
+              </span>
+            )}
           </div>
           {property.images && property.images.length > 1 && (
             <div className="mt-2 grid grid-cols-4 gap-2">
@@ -153,14 +160,33 @@ export default async function PropertyDetailView({ slug }: { slug: string }) {
             </div>
           )}
 
-          {/* Downloads — FR-PRP-007 / FR-INQ-005 */}
-          <DocumentsList documents={property.documents ?? []} />
+          {/* Downloads removed per requirement */}
 
           {/* Location map — FR-PRP-008. Uses Google's keyless "output=embed" iframe by
               default so the site works with zero configuration; if NEXT_PUBLIC_GOOGLE_MAPS_KEY
               is set, upgrade to the full Maps Embed API (nicer styling, still no client JS). */}
           <div className="mt-8">
             <h2 className="font-display text-lg text-ink">Location</h2>
+            {property.show_exact_location && (
+              <div className="mt-3 flex items-center justify-between text-sm text-ink">
+                <span>
+                  {property.address_line}, {property.city_name}, {property.district_name}, {property.province_name}
+                </span>
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${property.latitude},${property.longitude}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-brass hover:underline"
+                >
+                  Open in Google Maps
+                </a>
+              </div>
+            )}
+            {!property.show_exact_location && (
+              <div className="mt-3 text-sm text-ink">
+                {property.city_name}, {property.district_name}, {property.province_name}
+              </div>
+            )}
             <div className="mt-3 aspect-[16/7] w-full overflow-hidden border border-stone-line bg-stone-fog">
               <iframe
                 title="Property location map"

@@ -55,18 +55,37 @@ export async function adminFetch(path: string, options: RequestInit = {}): Promi
     Authorization: token ? `Bearer ${token}` : "",
     ...(options.body ? { "Content-Type": "application/json" } : {}),
   };
-  let res = await fetch(`${API_BASE}/admin${path}`, { ...options, headers });
-  if (res.status === 401) {
-    const refreshed = await tryRefresh();
-    if (refreshed) {
-      const retryHeaders = { ...headers, Authorization: `Bearer ${getToken()}` };
-      res = await fetch(`${API_BASE}/admin${path}`, { ...options, headers: retryHeaders });
-    } else {
-      clearTokens();
-      if (typeof window !== "undefined") window.location.href = "/admin";
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    let res = await fetch(`${API_BASE}/admin${path}`, { ...options, headers, signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (res.status === 401) {
+      const refreshed = await tryRefresh();
+      if (refreshed) {
+        const retryController = new AbortController();
+        const retryTimeoutId = setTimeout(() => retryController.abort(), 15000);
+        const retryHeaders = { ...headers, Authorization: `Bearer ${getToken()}` };
+        try {
+          res = await fetch(`${API_BASE}/admin${path}`, { ...options, headers: retryHeaders, signal: retryController.signal });
+        } finally {
+          clearTimeout(retryTimeoutId);
+        }
+      } else {
+        clearTokens();
+        if (typeof window !== "undefined") window.location.href = "/admin";
+      }
     }
+    return res;
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error("files are too large add a drive links instead.");
+    }
+    throw err;
   }
-  return res;
 }
 
 export async function adminJSON<T>(path: string, options: RequestInit = {}): Promise<T> {

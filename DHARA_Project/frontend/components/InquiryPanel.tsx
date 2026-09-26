@@ -60,33 +60,41 @@ export default function InquiryPanel({
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
   const maxDate = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
 
+  const isSold = property.status === "SOLD" || property.status === "RENTED";
+  const isReserved = property.status === "RESERVED";
+  const primaryLabel = isSold ? "Notify me of similar" : isReserved ? "Register Interest" : "Inquire";
+
   return (
     <>
       <aside className="h-fit border border-stone-line bg-stone-paper p-6 lg:sticky lg:top-24">
         <div className="font-display text-xl text-ink">{price}</div>
         <div className="mt-1 text-xs text-ink-soft">Ref: {property.reference_code}</div>
 
-        <div className="mt-5 grid grid-cols-3 gap-2">
-          <a href="tel:+94763774551" className="btn-outline justify-center px-2 text-xs">Call</a>
-          <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="btn-brass justify-center px-2 text-xs">WhatsApp</a>
-          <button onClick={() => document.getElementById("inquiry-form")?.scrollIntoView({ behavior: "smooth" })} className="btn-primary justify-center px-2 text-xs">
-            Inquire
-          </button>
-        </div>
+        {!isSold && (
+          <div className="mt-5 grid grid-cols-3 gap-2">
+            <a href="tel:+94763774551" className="btn-outline justify-center px-2 text-xs">Call</a>
+            <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="btn-brass justify-center px-2 text-xs">WhatsApp</a>
+            <button onClick={() => document.getElementById("inquiry-form")?.scrollIntoView({ behavior: "smooth" })} className="btn-primary justify-center px-2 text-xs">
+              {primaryLabel}
+            </button>
+          </div>
+        )}
 
         <div className="mt-6 flex border-b border-stone-line text-sm">
           <button
             className={`flex-1 pb-2 ${mode === "inquiry" ? "border-b-2 border-ink font-medium text-ink" : "text-ink-soft"}`}
             onClick={() => setMode("inquiry")}
           >
-            Inquire
+            {primaryLabel}
           </button>
-          <button
-            className={`flex-1 pb-2 ${mode === "inspection" ? "border-b-2 border-ink font-medium text-ink" : "text-ink-soft"}`}
-            onClick={() => setMode("inspection")}
-          >
-            Schedule Visit
-          </button>
+          {!isSold && (
+            <button
+              className={`flex-1 pb-2 ${mode === "inspection" ? "border-b-2 border-ink font-medium text-ink" : "text-ink-soft"}`}
+              onClick={() => setMode("inspection")}
+            >
+              Schedule Visit
+            </button>
+          )}
         </div>
 
         {status === "sent" ? (

@@ -22,6 +22,7 @@ export const ADMIN_NAV: { href: string; label: string; roles: AdminRole[] }[] = 
   { href: "/admin/settings", label: "Settings", roles: ["ADMINISTRATOR"] },
   { href: "/admin/users", label: "Users", roles: ["ADMINISTRATOR"] },
   { href: "/admin/audit-log", label: "Audit Log", roles: ["ADMINISTRATOR"] },
+  { href: "/admin/profile", label: "My Profile", roles: ["SALES_MANAGER", "CONTENT_EDITOR", "ADMINISTRATOR"] },
 ];
 
 /** First page a given role lands on after login / when redirected away from a denied page. */

@@ -56,7 +56,7 @@ func getEnvFloat(key string, fallback float64) float64 {
 func Load() *Config {
 	return &Config{
 		Port:             getEnv("PORT", "8080"),
-		DatabaseURL:      getEnv("DATABASE_URL", "postgres://postgres:20010305@Gdhg@localhost:5432/dhara?sslmode=disable"),
+		DatabaseURL:      getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dhara?sslmode=disable"),
 		JWTSecret:        getEnv("JWT_SECRET", "dev-secret-change-me"),
 		JWTAccessTTLMin:  getEnvInt("JWT_ACCESS_TTL_MIN", 60),
 		JWTRefreshTTLHrs: getEnvInt("JWT_REFRESH_TTL_HRS", 168),

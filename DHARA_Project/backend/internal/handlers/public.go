@@ -28,7 +28,7 @@ func NewPublicHandler(db *sql.DB, cfg *config.Config) *PublicHandler {
 func (h *PublicHandler) ListProperties(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
-	where := []string{"p.status = 'PUBLISHED'"}
+	where := []string{"p.status IN ('PUBLISHED', 'RESERVED', 'SOLD', 'RENTED')"}
 	args := []interface{}{}
 	add := func(cond string, val interface{}) {
 		args = append(args, val)
@@ -48,7 +48,7 @@ func (h *PublicHandler) ListProperties(w http.ResponseWriter, r *http.Request) {
 		add("d.name = $%d", v)
 	}
 	if v := q.Get("city"); v != "" {
-		add("c.name = $%d", v)
+		add("p.city = $%d", v)
 	}
 	if v := q.Get("price_min"); v != "" {
 		add("p.price_lkr >= $%d", v)
@@ -87,7 +87,7 @@ func (h *PublicHandler) ListProperties(w http.ResponseWriter, r *http.Request) {
 	if v := q.Get("q"); v != "" {
 		args = append(args, v, "%"+v+"%")
 		where = append(where, fmt.Sprintf(
-			"(p.reference_code = $%d OR p.title ILIKE $%d OR p.short_description ILIKE $%d OR c.name ILIKE $%d OR d.name ILIKE $%d)",
+			"(p.reference_code = $%d OR p.title ILIKE $%d OR p.short_description ILIKE $%d OR p.city ILIKE $%d OR d.name ILIKE $%d)",
 			len(args)-1, len(args), len(args), len(args), len(args)))
 	}
 
@@ -118,11 +118,11 @@ func (h *PublicHandler) ListProperties(w http.ResponseWriter, r *http.Request) {
 	var total int
 	countQuery := fmt.Sprintf(`
 		SELECT count(*) FROM properties p
-		
-		
-		JOIN cities c ON c.id = p.city_id
+		JOIN districts d ON d.id = p.district_id
+		JOIN provinces pr ON pr.id = p.province_id
 		WHERE %s`, whereSQL)
 	if err := h.DB.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		fmt.Printf("ListProperties count error: %v\nQuery: %s\n", err, countQuery)
 		httpx.Error(w, 500, "SERVER_ERROR", "Failed to count properties", nil)
 		return
 	}
@@ -132,12 +132,11 @@ func (h *PublicHandler) ListProperties(w http.ResponseWriter, r *http.Request) {
 		SELECT p.id, p.reference_code, p.title, p.slug, p.category, p.listing_type, p.status,
 		       p.is_featured, p.short_description, p.price_lkr, p.price_on_request, p.price_unit,
 		       p.land_area_count, p.built_area_sqft, p.bedrooms, p.bathrooms,
-		       c.name, d.name,
+		       p.city, d.name,
 		       COALESCE((SELECT url FROM property_images pi WHERE pi.property_id = p.id AND pi.is_cover LIMIT 1), '')
 		FROM properties p
-		
-		
-		JOIN cities c ON c.id = p.city_id
+		JOIN districts d ON d.id = p.district_id
+		JOIN provinces pr ON pr.id = p.province_id
 		WHERE %s
 		ORDER BY %s
 		LIMIT $%d OFFSET $%d`, whereSQL, sortCol, len(args)-1, len(args))
@@ -149,15 +148,26 @@ func (h *PublicHandler) ListProperties(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	results := []models.Property{}
+	type PropRes struct {
+		models.Property
+		CityName     *string `json:"city_name"`
+		DistrictName string  `json:"district_name"`
+	}
+
+	results := []PropRes{}
 	for rows.Next() {
-		var p models.Property
+		var p PropRes
 		if err := rows.Scan(&p.ID, &p.ReferenceCode, &p.Title, &p.Slug, &p.Category, &p.ListingType,
 			&p.Status, &p.IsFeatured, &p.ShortDescription, &p.PriceLKR, &p.PriceOnRequest, &p.PriceUnit,
-			&p.LandAreaCount, &p.BuiltAreaSqft, &p.Bedrooms, &p.Bathrooms, &p.City, &p.DistrictID, &p.ProvinceID, &p.CoverURL); err != nil {
+			&p.LandAreaCount, &p.BuiltAreaSqft, &p.Bedrooms, &p.Bathrooms, &p.CityName, &p.DistrictName, &p.CoverURL); err != nil {
+			fmt.Printf("ListProperties Scan error: %v\n", err)
 			continue
 		}
 		results = append(results, p)
+	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate properties", nil)
+		return
 	}
 
 	totalPages := (total + perPage - 1) / perPage
@@ -167,7 +177,15 @@ func (h *PublicHandler) ListProperties(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/properties/{slug} — FR-PRP: full detail with images/documents/amenities.
 func (h *PublicHandler) GetProperty(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
-	var p models.Property
+
+	type DetailRes struct {
+		models.Property
+		CityName     *string `json:"city_name"`
+		DistrictName string  `json:"district_name"`
+		ProvinceName string  `json:"province_name"`
+	}
+	var p DetailRes
+
 	err := h.DB.QueryRow(`
 		SELECT p.id, p.reference_code, p.title, p.slug, p.category, p.listing_type, p.status,
 		       p.is_featured, p.short_description, p.description,
@@ -180,11 +198,10 @@ func (h *PublicHandler) GetProperty(w http.ResponseWriter, r *http.Request) {
 		       p.built_area_sqft, p.bedrooms, p.bathrooms, p.floor_count, p.parking_spaces, p.year_built,
 		       p.furnishing, p.condition, p.has_electricity, p.water_source, p.deed_type, p.deed_note,
 		       p.has_boundary_wall, p.has_solar, p.ac_ready, p.video_url, p.google_drive_url, p.meta_title, p.meta_description,
-		       p.view_count, p.province_id, p.district_id, c.name
+		       p.view_count, p.province_id, p.district_id, p.city, p.city, d.name, pr.name
 		FROM properties p
-		
-		
-		JOIN cities c ON c.id = p.city_id
+		JOIN districts d ON d.id = p.district_id
+		JOIN provinces pr ON pr.id = p.province_id
 		WHERE p.slug = $1 AND p.status <> 'DRAFT' AND p.status <> 'ARCHIVED'`, slug).Scan(
 		&p.ID, &p.ReferenceCode, &p.Title, &p.Slug, &p.Category, &p.ListingType, &p.Status,
 		&p.IsFeatured, &p.ShortDescription, &p.Description,
@@ -195,7 +212,7 @@ func (h *PublicHandler) GetProperty(w http.ResponseWriter, r *http.Request) {
 		&p.BuiltAreaSqft, &p.Bedrooms, &p.Bathrooms, &p.FloorCount, &p.ParkingSpaces, &p.YearBuilt,
 		&p.Furnishing, &p.Condition, &p.HasElectricity, &p.WaterSource, &p.DeedType, &p.DeedNote,
 		&p.HasBoundaryWall, &p.HasSolar, &p.ACReady, &p.VideoURL, &p.GoogleDriveURL, &p.MetaTitle, &p.MetaDescription,
-		&p.ViewCount, &p.ProvinceID, &p.DistrictID, &p.City,
+		&p.ViewCount, &p.ProvinceID, &p.DistrictID, &p.City, &p.CityName, &p.DistrictName, &p.ProvinceName,
 	)
 	if err == sql.ErrNoRows {
 		// ARCHIVED listings return 410 Gone per §4.3 / NFR-SEO-008
@@ -212,31 +229,31 @@ func (h *PublicHandler) GetProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	imgRows, _ := h.DB.Query(`SELECT id, url, alt_text, sort_order, is_cover FROM property_images WHERE property_id=$1 ORDER BY sort_order`, p.ID)
-	for imgRows.Next() {
-		var img models.PropertyImage
-		imgRows.Scan(&img.ID, &img.URL, &img.AltText, &img.SortOrder, &img.IsCover)
-		p.Images = append(p.Images, img)
+	imgRows, err := h.DB.Query(`SELECT id, url, alt_text, sort_order, is_cover FROM property_images WHERE property_id=$1 ORDER BY sort_order`, p.ID)
+	if err == nil {
+		for imgRows.Next() {
+			var img models.PropertyImage
+			imgRows.Scan(&img.ID, &img.URL, &img.AltText, &img.SortOrder, &img.IsCover)
+			p.Images = append(p.Images, img)
+		}
+		_ = imgRows.Err()
+		imgRows.Close()
 	}
-	imgRows.Close()
 
-	docRows, _ := h.DB.Query(`SELECT id, type, title, access, is_watermarked FROM property_documents WHERE property_id=$1 AND access <> 'INTERNAL'`, p.ID)
-	for docRows.Next() {
-		var d models.PropertyDocument
-		docRows.Scan(&d.ID, &d.Type, &d.Title, &d.Access, &d.IsWatermarked)
-		p.Docs = append(p.Docs, d)
-	}
-	docRows.Close()
+	// Documents fetch omitted per user requirement for public payload
 
-	amRows, _ := h.DB.Query(`
+	amRows, err := h.DB.Query(`
 		SELECT a.id, a.name, a.icon FROM amenities a
 		JOIN property_amenities pa ON pa.amenity_id = a.id WHERE pa.property_id=$1`, p.ID)
-	for amRows.Next() {
-		var a models.Amenity
-		amRows.Scan(&a.ID, &a.Name, &a.Icon)
-		p.Amenities = append(p.Amenities, a)
+	if err == nil {
+		for amRows.Next() {
+			var a models.Amenity
+			amRows.Scan(&a.ID, &a.Name, &a.Icon)
+			p.Amenities = append(p.Amenities, a)
+		}
+		_ = amRows.Err()
+		amRows.Close()
 	}
-	amRows.Close()
 
 	if p.LandAreaCount != nil {
 		p.MetaDescription = strPtr(util.LandExtentDisplay(*p.LandAreaCount))
@@ -267,13 +284,13 @@ func (h *PublicHandler) SimilarProperties(w http.ResponseWriter, r *http.Request
 	}
 	rows, err := h.DB.Query(`
 		SELECT p2.id, p2.reference_code, p2.title, p2.slug, p2.category, p2.listing_type,
-		       p2.short_description, p2.price_lkr, p2.price_on_request, c.name, d.name,
+		       p2.short_description, p2.price_lkr, p2.price_on_request, p2.city, d.name, pr.name,
 		       COALESCE((SELECT url FROM property_images pi WHERE pi.property_id=p2.id AND pi.is_cover LIMIT 1),'')
 		FROM properties p1
-		JOIN properties p2 ON p2.category = p1.category AND p2.district_id = p1.district_id AND p2.id <> p1.id
-		JOIN cities c ON c.id = p2.city_id
+		JOIN properties p2 ON p2.category = p1.category AND p2.listing_type = p1.listing_type AND p2.district_id = p1.district_id AND p2.id <> p1.id
 		JOIN districts d ON d.id = p2.district_id
-		WHERE p1.id = $1 AND p2.status = 'PUBLISHED'
+		JOIN provinces pr ON pr.id = p2.province_id
+		WHERE p1.id = $1 AND p2.status IN ('PUBLISHED', 'RESERVED')
 		  AND (p1.price_lkr IS NULL OR p2.price_lkr IS NULL OR
 		       p2.price_lkr BETWEEN p1.price_lkr * 0.7 AND p1.price_lkr * 1.3)
 		LIMIT $2`, id, limit)
@@ -282,12 +299,25 @@ func (h *PublicHandler) SimilarProperties(w http.ResponseWriter, r *http.Request
 		return
 	}
 	defer rows.Close()
-	results := []models.Property{}
+	type SimilarRes struct {
+		models.Property
+		CityName     *string `json:"city_name"`
+		DistrictName string  `json:"district_name"`
+		ProvinceName string  `json:"province_name"`
+	}
+	results := []SimilarRes{}
 	for rows.Next() {
-		var p models.Property
-		rows.Scan(&p.ID, &p.ReferenceCode, &p.Title, &p.Slug, &p.Category, &p.ListingType,
-			&p.ShortDescription, &p.PriceLKR, &p.PriceOnRequest, &p.City, &p.DistrictID, &p.ProvinceID, &p.CoverURL)
+		var p SimilarRes
+		err := rows.Scan(&p.ID, &p.ReferenceCode, &p.Title, &p.Slug, &p.Category, &p.ListingType,
+			&p.ShortDescription, &p.PriceLKR, &p.PriceOnRequest, &p.CityName, &p.DistrictName, &p.ProvinceName, &p.CoverURL)
+		if err != nil {
+			continue
+		}
 		results = append(results, p)
+	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate similar properties", nil)
+		return
 	}
 	httpx.JSON(w, 200, results)
 }
@@ -314,10 +344,9 @@ func (h *PublicHandler) Locations(w http.ResponseWriter, r *http.Request) {
 			dRows.Scan(&d.ID, &d.Name)
 			pv.Districts = append(pv.Districts, d)
 		}
-		dRows.Close()
-		provinces = append(provinces, pv)
+		_ = pRows.Err()
+		pRows.Close()
 	}
-	pRows.Close()
 	httpx.JSON(w, 200, provinces)
 }
 
@@ -334,6 +363,10 @@ func (h *PublicHandler) Amenities(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&a.ID, &a.Name, &a.Icon)
 		out = append(out, a)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate amenities", nil)
+		return
+	}
 	httpx.JSON(w, 200, out)
 }
 
@@ -349,6 +382,10 @@ func (h *PublicHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 		var s models.Service
 		rows.Scan(&s.ID, &s.Slug, &s.Title, &s.Summary, &s.Icon, &s.HeroImage, &s.SortOrder)
 		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate services", nil)
+		return
 	}
 	httpx.JSON(w, 200, out)
 }
@@ -385,6 +422,10 @@ func (h *PublicHandler) ListProjects(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Sector, &p.Location, &p.YearCompleted, &p.CoverImage, &p.IsFeatured)
 		out = append(out, p)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate projects", nil)
+		return
+	}
 	httpx.JSON(w, 200, out)
 }
 
@@ -414,6 +455,10 @@ func (h *PublicHandler) Testimonials(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&t.ID, &t.AuthorName, &t.AuthorLocation, &t.Quote, &t.Rating)
 		out = append(out, t)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate testimonials", nil)
+		return
+	}
 	httpx.JSON(w, 200, out)
 }
 
@@ -425,6 +470,8 @@ var publicSettingsAllowlist = map[string]bool{
 	"social":         true,
 	"usd_rate":       true,
 	"homepage_stats": true,
+	"footer":         true,
+	"why_dhara":      true,
 }
 
 func (h *PublicHandler) PublicSettings(w http.ResponseWriter, r *http.Request) {
@@ -443,28 +490,32 @@ func (h *PublicHandler) PublicSettings(w http.ResponseWriter, r *http.Request) {
 			out[key] = string(raw)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate settings", nil)
+		return
+	}
 	httpx.JSON(w, 200, out)
 }
 
 // --- Leads (§4.6, §5.4, §6.1) ---
 
 type leadRequest struct {
-	LeadType                string  `json:"lead_type"`
-	PropertyID              *string `json:"property_id"`
-	Name                    string  `json:"name"`
-	Email                   string  `json:"email"`
-	Phone                   string  `json:"phone"`
-	Message                 string  `json:"message"`
+	LeadType                string   `json:"lead_type"`
+	PropertyID              *string  `json:"property_id"`
+	Name                    string   `json:"name"`
+	Email                   string   `json:"email"`
+	Phone                   string   `json:"phone"`
+	Message                 string   `json:"message"`
 	OfferAmountLKR          *float64 `json:"offer_amount_lkr"`
-	PreferredInspectionDate *string `json:"preferred_inspection_date"`
-	PreferredInspectionSlot *string `json:"preferred_inspection_slot"`
-	SourceURL               string  `json:"source_url"`
-	UTMSource               string  `json:"utm_source"`
-	UTMMedium               string  `json:"utm_medium"`
-	UTMCampaign             string  `json:"utm_campaign"`
-	Consent                 bool    `json:"consent"`
-	TurnstileToken          string  `json:"turnstile_token"`
-	Honeypot                string  `json:"website"` // honeypot field, must stay empty (NFR-SEC-002)
+	PreferredInspectionDate *string  `json:"preferred_inspection_date"`
+	PreferredInspectionSlot *string  `json:"preferred_inspection_slot"`
+	SourceURL               string   `json:"source_url"`
+	UTMSource               string   `json:"utm_source"`
+	UTMMedium               string   `json:"utm_medium"`
+	UTMCampaign             string   `json:"utm_campaign"`
+	Consent                 bool     `json:"consent"`
+	TurnstileToken          string   `json:"turnstile_token"`
+	Honeypot                string   `json:"website"` // honeypot field, must stay empty (NFR-SEC-002)
 }
 
 // POST /api/v1/leads — FR-INQ-001/002/004/006/007/008/009.

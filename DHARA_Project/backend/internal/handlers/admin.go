@@ -140,13 +140,6 @@ type propertyInput struct {
 	Documents         []models.PropertyDocument `json:"documents"`
 }
 
-func (h *AdminHandler) validateProperty(in propertyInput) map[string]string {
-	fields := map[string]string{}
-	if len(in.Title) < 10 || len(in.Title) > 160 {
-		fields["title"] = "Title must be 10-160 characters"
-	}
-	return fields
-}
 
 // GET /api/v1/admin/properties
 func (h *AdminHandler) ListAllProperties(w http.ResponseWriter, r *http.Request) {
@@ -202,6 +195,10 @@ func (h *AdminHandler) ListAllProperties(w http.ResponseWriter, r *http.Request)
 			"district_name": districtName,
 		})
 	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate properties", nil)
+		return
+	}
 	httpx.JSON(w, 200, out)
 }
 
@@ -213,6 +210,7 @@ func (h *AdminHandler) GetPropertyAdmin(w http.ResponseWriter, r *http.Request) 
 		SELECT id, reference_code, title, slug, category, listing_type, status, is_featured,
 		       short_description, description, price_lkr, price_on_request, price_unit, is_negotiable,
 		       rent_period, minimum_lease_months, advance_months, deposit_lkr,
+
 		       province_id, district_id, city, address_line, map_url, show_exact_location, latitude, longitude,
 		       land_area_unit, land_area_count, road_access, road_width_ft, road_surface, land_shape, frontage_ft, land_type,
 		       built_area_sqft, bedrooms, bathrooms, floor_count, parking_spaces, year_built, furnishing, condition,
@@ -247,7 +245,6 @@ func (h *AdminHandler) GetPropertyAdmin(w http.ResponseWriter, r *http.Request) 
 			p.CoverURL = img.URL
 		}
 	}
-	imgRows.Close()
 
 	docRows, _ := h.DB.Query(`SELECT id, type, title, file_url, access, is_watermarked, download_count FROM property_documents WHERE property_id=$1`, p.ID)
 	for docRows.Next() {
@@ -255,7 +252,6 @@ func (h *AdminHandler) GetPropertyAdmin(w http.ResponseWriter, r *http.Request) 
 		docRows.Scan(&d.ID, &d.Type, &d.Title, &d.FileURL, &d.Access, &d.IsWatermarked, &d.DownloadCount)
 		p.Docs = append(p.Docs, d)
 	}
-	docRows.Close()
 
 	httpx.JSON(w, 200, p)
 }
@@ -506,20 +502,40 @@ func (h *AdminHandler) TransitionStatus(w http.ResponseWriter, r *http.Request) 
 	}
 	req.Status = strings.ToUpper(req.Status)
 
-	if req.Status == "PUBLISHED" {
+	switch req.Status {
+	case "PUBLISHED":
 		var imgCount int
 		var hasCover bool
-		h.DB.QueryRow(`SELECT count(*), EXISTS(SELECT 1 FROM property_images WHERE property_id=$1 AND is_cover=true) FROM property_images WHERE property_id=$1`, id).Scan(&imgCount, &hasCover)
+		var p models.Property
+		var city, priceUnit sql.NullString
+		var provinceId, districtId sql.NullInt64
+		var priceLKR sql.NullFloat64
+		
+		h.DB.QueryRow(`
+			SELECT p.category, p.listing_type, p.province_id, p.district_id, p.city, p.title, p.slug, p.short_description, p.description, p.price_lkr, p.price_on_request, p.price_unit,
+			       (SELECT count(*) FROM property_images WHERE property_id=$1),
+			       EXISTS(SELECT 1 FROM property_images WHERE property_id=$1 AND is_cover=true)
+			FROM properties p WHERE p.id=$1`, id).Scan(
+			&p.Category, &p.ListingType, &provinceId, &districtId, &city, &p.Title, &p.Slug, &p.ShortDescription, &p.Description, &priceLKR, &p.PriceOnRequest, &priceUnit, &imgCount, &hasCover)
+		
+		if p.Category == "" || p.ListingType == "" || !provinceId.Valid || provinceId.Int64 == 0 || !districtId.Valid || districtId.Int64 == 0 || !city.Valid || city.String == "" || p.Title == "" || p.Slug == "" || p.ShortDescription == "" || p.Description == "" {
+			httpx.Error(w, 400, "VALIDATION_ERROR", "Cannot publish: All required fields (Property Type, Listing Type, Province, District, City, Title, Slug, Short Description, Description) must be filled.", nil)
+			return
+		}
+		if !p.PriceOnRequest && (!priceLKR.Valid || priceLKR.Float64 <= 0 || !priceUnit.Valid || priceUnit.String == "") {
+			httpx.Error(w, 400, "VALIDATION_ERROR", "Cannot publish: Price and Price Unit must be specified unless Price On Request is checked.", nil)
+			return
+		}
 		if imgCount < 3 || !hasCover {
 			httpx.Error(w, 400, "VALIDATION_ERROR", "At least 3 images and a cover photo are required before publishing", nil)
 			return
 		}
 		h.DB.Exec(`UPDATE properties SET status=$1, published_at=COALESCE(published_at, now()), sold_rented_at=NULL, updated_at=now() WHERE id=$2`, req.Status, id)
-	} else if req.Status == "SOLD" || req.Status == "RENTED" {
+	case "SOLD", "RENTED":
 		h.DB.Exec(`UPDATE properties SET status=$1, sold_rented_at=now(), updated_at=now() WHERE id=$2`, req.Status, id)
-	} else if req.Status == "RESERVED" {
+	case "RESERVED":
 		h.DB.Exec(`UPDATE properties SET status=$1, sold_rented_at=NULL, updated_at=now() WHERE id=$2`, req.Status, id)
-	} else {
+	default:
 		h.DB.Exec(`UPDATE properties SET status=$1, sold_rented_at=NULL, updated_at=now() WHERE id=$2`, req.Status, id)
 	}
 
@@ -726,6 +742,10 @@ func (h *AdminHandler) ListLeads(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&l.ID, &l.LeadType, &l.PropertyID, &l.Name, &l.Email, &l.Phone, &l.Message, &l.Status, &l.AssignedTo, &l.CreatedAt)
 		out = append(out, l)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate leads", nil)
+		return
+	}
 	httpx.JSON(w, 200, out)
 }
 
@@ -837,6 +857,9 @@ func (h *AdminHandler) ExportLeads(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&leadType, &propertyID, &name, &email, &phone, &status, &assignedTo, &internalNotes, &message, &createdAt)
 		cw.Write([]string{leadType, propertyID.String, name, email, phone, status, assignedTo.String, internalNotes.String, message.String, createdAt.Format(time.RFC3339)})
 	}
+	if err := rows.Err(); err != nil {
+		return
+	}
 	cw.Flush()
 }
 
@@ -848,27 +871,31 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	h.DB.QueryRow(`SELECT count(*) FROM leads WHERE created_at > now() - interval '30 days'`).Scan(&newLeads30)
 
 	byStatus := map[string]int{}
-	rows, _ := h.DB.Query(`SELECT status, count(*) FROM properties GROUP BY status`)
-	for rows.Next() {
-		var s string
-		var c int
-		rows.Scan(&s, &c)
-		byStatus[s] = c
+	if rows, err := h.DB.Query(`SELECT status, count(*) FROM properties GROUP BY status`); err == nil {
+		for rows.Next() {
+			var s string
+			var c int
+			rows.Scan(&s, &c)
+			byStatus[s] = c
+		}
+		_ = rows.Err()
+		rows.Close()
 	}
-	rows.Close()
 
 	type topViewed struct {
 		Title     string `json:"title"`
 		ViewCount int    `json:"view_count"`
 	}
 	top := []topViewed{}
-	tvRows, _ := h.DB.Query(`SELECT title, view_count FROM properties ORDER BY view_count DESC LIMIT 5`)
-	for tvRows.Next() {
-		var t topViewed
-		tvRows.Scan(&t.Title, &t.ViewCount)
-		top = append(top, t)
+	if tvRows, err := h.DB.Query(`SELECT title, view_count FROM properties ORDER BY view_count DESC LIMIT 5`); err == nil {
+		for tvRows.Next() {
+			var t topViewed
+			tvRows.Scan(&t.Title, &t.ViewCount)
+			top = append(top, t)
+		}
+		_ = tvRows.Err()
+		tvRows.Close()
 	}
-	tvRows.Close()
 
 	var closedWon, closedLost int
 	h.DB.QueryRow(`SELECT count(*) FROM leads WHERE status='CLOSED_WON'`).Scan(&closedWon)
@@ -884,7 +911,43 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ---------- System Users / RBAC ----------
+func mustJSON(v interface{}) string {
+	b, _ := json.Marshal(v)
+	return string(b)
+}
+
+// ---------- Settings, Users, Audit log ----------
+
+func (h *AdminHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
+	rows, _ := h.DB.Query(`SELECT key, value FROM settings`)
+	defer rows.Close()
+	out := map[string]interface{}{}
+	for rows.Next() {
+		var k string
+		var v []byte
+		rows.Scan(&k, &v)
+		out[k] = string(v)
+	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate settings", nil)
+		return
+	}
+	httpx.JSON(w, 200, out)
+}
+
+func (h *AdminHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
+	var body map[string]interface{}
+	if err := decodeJSON(r, &body); err != nil {
+		httpx.Error(w, 400, "VALIDATION_ERROR", "Invalid request body", nil)
+		return
+	}
+	for k, v := range body {
+		h.DB.Exec(`INSERT INTO settings (key, value) VALUES ($1,$2)
+			ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=now()`, k, mustJSON(v))
+	}
+	h.audit(h.userID(r), "UPDATE", "settings", "site")
+	httpx.JSON(w, 200, map[string]string{"status": "updated"})
+}
 
 func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	rows, _ := h.DB.Query(`SELECT id, name, email, role, is_active, last_login_at FROM users ORDER BY created_at DESC`)
@@ -894,6 +957,10 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		var u models.User
 		rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.IsActive, &u.LastLoginAt)
 		out = append(out, u)
+	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate users", nil)
+		return
 	}
 	httpx.JSON(w, 200, out)
 }
@@ -945,15 +1012,13 @@ func (h *AdminHandler) AuditLog(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, a)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate audit log", nil)
+		return
+	}
 	httpx.JSON(w, 200, out)
 }
 
-func (h *AdminHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
-	httpx.JSON(w, 200, map[string]string{"status": "ok"})
-}
 
-func (h *AdminHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
-	httpx.JSON(w, 200, map[string]string{"status": "ok"})
-}
 
 

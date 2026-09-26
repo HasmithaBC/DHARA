@@ -8,6 +8,7 @@ import { useCurrency } from "@/lib/currency-context";
 import { clearTokens, getRole } from "@/lib/admin-api";
 import { homeForRole } from "@/lib/admin-guard";
 import { useRouter } from "next/navigation";
+import SignOutModal from "@/components/SignOutModal";
 
 const propertyLinks = [
   { href: "/properties?category=LAND", label: "Lands" },
@@ -37,6 +38,7 @@ export default function Header() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [dashboardUrl, setDashboardUrl] = useState("/admin/dashboard");
+  const [showSignOutModal, setShowSignOutModal] = useState(false);
 
   useEffect(() => {
     // Check auth state when the dropdown is opened
@@ -161,14 +163,17 @@ export default function Header() {
                       <Link href={dashboardUrl} className="block px-4 py-2 text-sm transition-colors hover:bg-stone-fog hover:text-brass-dark" onClick={() => setProfileOpen(false)}>
                         Dashboard
                       </Link>
-                      <button onClick={() => { 
-                        clearTokens(); 
-                        setIsLoggedIn(false); 
-                        setProfileOpen(false); 
-                        router.push('/admin');
-                        router.refresh();
-                      }} className="block w-full text-left px-4 py-2 text-sm transition-colors hover:bg-stone-fog hover:text-brass-dark">
-                        Logout
+                      <Link href="/admin/profile" className="block px-4 py-2 text-sm transition-colors hover:bg-stone-fog hover:text-brass-dark" onClick={() => setProfileOpen(false)}>
+                        Edit Profile
+                      </Link>
+                      <button
+                        onClick={() => {
+                          setProfileOpen(false);
+                          setShowSignOutModal(true);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm transition-colors hover:bg-stone-fog hover:text-brass-dark"
+                      >
+                        Sign out
                       </button>
                     </>
                   ) : (
@@ -308,6 +313,18 @@ export default function Header() {
           </>
         )}
       </AnimatePresence>
+
+      <SignOutModal
+        isOpen={showSignOutModal}
+        onClose={() => setShowSignOutModal(false)}
+        onConfirm={() => {
+          clearTokens();
+          setIsLoggedIn(false);
+          setShowSignOutModal(false);
+          router.push("/admin");
+          router.refresh();
+        }}
+      />
     </header>
   );
 }

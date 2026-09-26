@@ -25,10 +25,14 @@ export default function PropertyCard({ property }: { property: PropertySummary }
           .filter(Boolean)
           .join(" · ");
 
+  const isSold = property.status === "SOLD" || property.status === "RENTED";
+
   return (
     <Link
       href={detailHref}
-      className="group flex h-full flex-col border border-stone-line bg-stone-paper transition-all duration-300 hover:-translate-y-1 hover:border-brass hover:shadow-xl"
+      className={`group flex h-full flex-col border border-stone-line bg-stone-paper transition-all duration-300 ${
+        isSold ? "opacity-75 grayscale hover:opacity-100 hover:grayscale-0" : "hover:-translate-y-1 hover:border-brass hover:shadow-xl"
+      }`}
     >
       <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-stone-fog">
         {property.cover_url && (
@@ -49,9 +53,14 @@ export default function PropertyCard({ property }: { property: PropertySummary }
             {listingTypeLabel(property.listing_type)}
           </span>
         </div>
-        {property.status !== "PUBLISHED" && (
-          <div className="absolute right-3 top-3 bg-concrete-900 px-2 py-1 text-xs text-stone-paper">
-            {property.status.replace("_", " ")}
+        {property.status === "RESERVED" && (
+          <div className="absolute right-3 top-3 bg-brass-dark px-2 py-1 text-xs text-white shadow">
+            Under Offer
+          </div>
+        )}
+        {(property.status === "SOLD" || property.status === "RENTED") && (
+          <div className="absolute right-3 top-3 bg-ink px-2 py-1 text-xs text-white shadow">
+            {property.status === "SOLD" ? "Sold" : "Rented"}
           </div>
         )}
       </div>
