@@ -1,0 +1,244 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #EDEFEA;
+  color: #21221E;
+}
+
+/* ---------- Scrollbar — brass on concrete, matches the site's hardware palette ---------- */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #EDEFEA; }
+::-webkit-scrollbar-thumb { background: #C08A3E; border: 2px solid #EDEFEA; }
+::-webkit-scrollbar-thumb:hover { background: #9C6C2B; }
+html { scrollbar-color: #C08A3E #EDEFEA; scrollbar-width: thin; }
+
+/* ---------- Focus visibility — accessible brass ring sitewide ---------- */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #C08A3E;
+  outline-offset: 2px;
+}
+
+.container-content {
+  max-width: 1280px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+.rule {
+  border-top: 1px solid #D7DAD2;
+}
+
+/* Buttons share a "stamped steel plate" silhouette — corners clipped like a cut
+   nameplate — which is the site's small recurring nod to industrial hardware. */
+.btn-primary,
+.btn-outline,
+.btn-brass {
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #21221E;
+  color: #F7F8F5;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+  transition: background-color 150ms ease, filter 150ms ease;
+}
+.btn-primary:hover { background-color: #2E2F2A; filter: drop-shadow(0 10px 18px rgba(33,34,30,0.35)); }
+.btn-primary:active { transform: translateY(1px); }
+
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid #21221E;
+  color: #21221E;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+  transition: all 150ms ease;
+}
+.btn-outline:hover { background-color: #21221E; color: #F7F8F5; filter: drop-shadow(0 10px 18px rgba(33,34,30,0.25)); }
+.btn-outline:active { transform: translateY(1px); }
+
+.btn-brass {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #C08A3E;
+  color: #21221E;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: background-color 150ms ease, filter 150ms ease;
+}
+.btn-brass:hover { background-color: #9C6C2B; color: #F7F8F5; filter: drop-shadow(0 10px 20px rgba(192,138,62,0.5)); }
+.btn-brass:active { transform: translateY(1px); }
+
+.eyebrow {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: #3E5259;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* ---------- Animation utilities ---------- */
+
+@keyframes kenburns {
+  0% { transform: scale(1) translate3d(0, 0, 0); }
+  100% { transform: scale(1.12) translate3d(-1%, -1%, 0); }
+}
+.animate-kenburns {
+  animation: kenburns 18s ease-out forwards;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up {
+  opacity: 0;
+  animation: fadeInUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.fade-in-up-1 { animation-delay: 0.05s; }
+.fade-in-up-2 { animation-delay: 0.2s; }
+.fade-in-up-3 { animation-delay: 0.35s; }
+.fade-in-up-4 { animation-delay: 0.5s; }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #EDEFEA 25%, #F7F8F5 37%, #EDEFEA 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-kenburns,
+  .fade-in-up {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* ---------- Construction-site charm — blueprint grids, concrete grain, hazard stripe ---------- */
+
+/* Faint brass blueprint grid — for dark hero/CTA panels */
+.bg-blueprint {
+  background-image:
+    linear-gradient(rgba(228, 192, 137, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(228, 192, 137, 0.14) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+
+/* Faint ink blueprint grid — for light stone-paper panels */
+.bg-blueprint-light {
+  background-image:
+    linear-gradient(rgba(33, 34, 30, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(33, 34, 30, 0.06) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+
+/* Subtle poured-concrete grain for dark panels */
+.bg-noise {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.035 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+/* Hazard-tape derived diagonal stripe — used sparingly as a signature divider */
+.stripe-band {
+  background-image: repeating-linear-gradient(-45deg, #C08A3E, #C08A3E 12px, #21221E 12px, #21221E 24px);
+}
+
+@keyframes pulseRing {
+  0% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.pulse-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid #E4C089;
+  animation: pulseRing 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+.pulse-ring-delay {
+  animation-delay: 1.2s;
+}
+
+@keyframes floatY {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+.animate-float {
+  animation: floatY 4.5s ease-in-out infinite;
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 26s linear infinite;
+}
+
+@keyframes drawLine {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.animate-draw-line {
+  transform-origin: left;
+  animation: drawLine 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Elevated card used across feature/stat/testimonial blocks */
+.card-elevated {
+  background-color: #F7F8F5;
+  border: 1px solid #D7DAD2;
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 300ms ease, border-color 300ms ease;
+}
+.card-elevated:hover {
+  transform: translateY(-4px);
+  border-color: #C08A3E;
+  box-shadow: 0 20px 40px -20px rgba(33, 34, 30, 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .pulse-ring,
+  .animate-float,
+  .animate-marquee,
+  .animate-draw-line {
+    animation: none !important;
+  }
+  .card-elevated:hover {
+    transform: none;
+  }
+}
+
+/* Print stylesheet — FRPRP-013: one-page property fact sheet, no navigation chrome. */
+@media print {
+  header, footer, nav { display: none !important; }
+  .print\:hidden { display: none !important; }
+  body { background: #fff; color: #000; }
+  a { color: #000; text-decoration: none; }
+}
