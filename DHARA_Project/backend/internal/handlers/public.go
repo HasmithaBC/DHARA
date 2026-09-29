@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -159,6 +160,10 @@ func (h *PublicHandler) ListProperties(w http.ResponseWriter, r *http.Request) {
 		}
 		results = append(results, p)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate properties", nil)
+		return
+	}
 
 	totalPages := (total + perPage - 1) / perPage
 	httpx.JSONList(w, 200, results, httpx.Meta{Page: page, PerPage: perPage, Total: total, TotalPages: totalPages})
@@ -212,31 +217,40 @@ func (h *PublicHandler) GetProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	imgRows, _ := h.DB.Query(`SELECT id, url, alt_text, sort_order, is_cover FROM property_images WHERE property_id=$1 ORDER BY sort_order`, p.ID)
-	for imgRows.Next() {
-		var img models.PropertyImage
-		imgRows.Scan(&img.ID, &img.URL, &img.AltText, &img.SortOrder, &img.IsCover)
-		p.Images = append(p.Images, img)
+	imgRows, err := h.DB.Query(`SELECT id, url, alt_text, sort_order, is_cover FROM property_images WHERE property_id=$1 ORDER BY sort_order`, p.ID)
+	if err == nil {
+		for imgRows.Next() {
+			var img models.PropertyImage
+			imgRows.Scan(&img.ID, &img.URL, &img.AltText, &img.SortOrder, &img.IsCover)
+			p.Images = append(p.Images, img)
+		}
+		_ = imgRows.Err()
+		imgRows.Close()
 	}
-	imgRows.Close()
 
-	docRows, _ := h.DB.Query(`SELECT id, type, title, access, is_watermarked FROM property_documents WHERE property_id=$1 AND access <> 'INTERNAL'`, p.ID)
-	for docRows.Next() {
-		var d models.PropertyDocument
-		docRows.Scan(&d.ID, &d.Type, &d.Title, &d.Access, &d.IsWatermarked)
-		p.Docs = append(p.Docs, d)
+	docRows, err := h.DB.Query(`SELECT id, type, title, access, is_watermarked FROM property_documents WHERE property_id=$1 AND access <> 'INTERNAL'`, p.ID)
+	if err == nil {
+		for docRows.Next() {
+			var d models.PropertyDocument
+			docRows.Scan(&d.ID, &d.Type, &d.Title, &d.Access, &d.IsWatermarked)
+			p.Docs = append(p.Docs, d)
+		}
+		_ = docRows.Err()
+		docRows.Close()
 	}
-	docRows.Close()
 
-	amRows, _ := h.DB.Query(`
+	amRows, err := h.DB.Query(`
 		SELECT a.id, a.name, a.icon FROM amenities a
 		JOIN property_amenities pa ON pa.amenity_id = a.id WHERE pa.property_id=$1`, p.ID)
-	for amRows.Next() {
-		var a models.Amenity
-		amRows.Scan(&a.ID, &a.Name, &a.Icon)
-		p.Amenities = append(p.Amenities, a)
+	if err == nil {
+		for amRows.Next() {
+			var a models.Amenity
+			amRows.Scan(&a.ID, &a.Name, &a.Icon)
+			p.Amenities = append(p.Amenities, a)
+		}
+		_ = amRows.Err()
+		amRows.Close()
 	}
-	amRows.Close()
 
 	if p.LandExtentPerches != nil {
 		p.MetaDescription = strPtr(util.LandExtentDisplay(*p.LandExtentPerches))
@@ -289,6 +303,10 @@ func (h *PublicHandler) SimilarProperties(w http.ResponseWriter, r *http.Request
 			&p.ShortDescription, &p.PriceLKR, &p.PriceOnRequest, &p.City, &p.District, &p.CoverURL)
 		results = append(results, p)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate similar properties", nil)
+		return
+	}
 	httpx.JSON(w, 200, results)
 }
 
@@ -310,27 +328,36 @@ func (h *PublicHandler) Locations(w http.ResponseWriter, r *http.Request) {
 	}
 
 	provinces := []provinceJSON{}
-	pRows, _ := h.DB.Query(`SELECT id, name FROM provinces ORDER BY name`)
-	for pRows.Next() {
-		var pv provinceJSON
-		pRows.Scan(&pv.ID, &pv.Name)
-		dRows, _ := h.DB.Query(`SELECT id, name FROM districts WHERE province_id=$1 ORDER BY name`, pv.ID)
-		for dRows.Next() {
-			var d districtJSON
-			dRows.Scan(&d.ID, &d.Name)
-			cRows, _ := h.DB.Query(`SELECT id, name FROM cities WHERE district_id=$1 ORDER BY name`, d.ID)
-			for cRows.Next() {
-				var c cityJSON
-				cRows.Scan(&c.ID, &c.Name)
-				d.Cities = append(d.Cities, c)
+	pRows, err := h.DB.Query(`SELECT id, name FROM provinces ORDER BY name`)
+	if err == nil {
+		for pRows.Next() {
+			var pv provinceJSON
+			pRows.Scan(&pv.ID, &pv.Name)
+			dRows, err := h.DB.Query(`SELECT id, name FROM districts WHERE province_id=$1 ORDER BY name`, pv.ID)
+			if err == nil {
+				for dRows.Next() {
+					var d districtJSON
+					dRows.Scan(&d.ID, &d.Name)
+					cRows, err := h.DB.Query(`SELECT id, name FROM cities WHERE district_id=$1 ORDER BY name`, d.ID)
+					if err == nil {
+						for cRows.Next() {
+							var c cityJSON
+							cRows.Scan(&c.ID, &c.Name)
+							d.Cities = append(d.Cities, c)
+						}
+						_ = cRows.Err()
+						cRows.Close()
+					}
+					pv.Districts = append(pv.Districts, d)
+				}
+				_ = dRows.Err()
+				dRows.Close()
 			}
-			cRows.Close()
-			pv.Districts = append(pv.Districts, d)
+			provinces = append(provinces, pv)
 		}
-		dRows.Close()
-		provinces = append(provinces, pv)
+		_ = pRows.Err()
+		pRows.Close()
 	}
-	pRows.Close()
 	httpx.JSON(w, 200, provinces)
 }
 
@@ -346,6 +373,10 @@ func (h *PublicHandler) Amenities(w http.ResponseWriter, r *http.Request) {
 		var a models.Amenity
 		rows.Scan(&a.ID, &a.Name, &a.Icon)
 		out = append(out, a)
+	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate amenities", nil)
+		return
 	}
 	httpx.JSON(w, 200, out)
 }
@@ -363,16 +394,23 @@ func (h *PublicHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&s.ID, &s.Slug, &s.Title, &s.Summary, &s.Icon, &s.HeroImage, &s.SortOrder)
 		out = append(out, s)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate services", nil)
+		return
+	}
 	httpx.JSON(w, 200, out)
 }
 
 func (h *PublicHandler) GetService(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	var s models.Service
-	err := h.DB.QueryRow(`SELECT id, slug, title, summary, body, icon, hero_image, sort_order FROM services WHERE slug=$1 AND is_published`, slug).
-		Scan(&s.ID, &s.Slug, &s.Title, &s.Summary, &s.Body, &s.Icon, &s.HeroImage, &s.SortOrder)
+	err := h.DB.QueryRow(`SELECT id, slug, title, COALESCE(summary,''), COALESCE(body,''), COALESCE(icon,''), COALESCE(hero_image,''), sort_order, is_published FROM services WHERE slug=$1 AND is_published`, slug).
+		Scan(&s.ID, &s.Slug, &s.Title, &s.Summary, &s.Body, &s.Icon, &s.HeroImage, &s.SortOrder, &s.IsPublished)
 	if err == sql.ErrNoRows {
 		httpx.Error(w, 404, "NOT_FOUND", "Service not found", nil)
+		return
+	} else if err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to load service", nil)
 		return
 	}
 	httpx.JSON(w, 200, s)
@@ -398,18 +436,31 @@ func (h *PublicHandler) ListProjects(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Sector, &p.Location, &p.YearCompleted, &p.CoverImage, &p.IsFeatured)
 		out = append(out, p)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate projects", nil)
+		return
+	}
 	httpx.JSON(w, 200, out)
 }
 
 func (h *PublicHandler) GetProject(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	var p models.Project
-	err := h.DB.QueryRow(`SELECT id, slug, title, client_name, sector, location, year_completed, scope, body, cover_image, is_featured
+	var galleryRaw []byte
+	err := h.DB.QueryRow(`SELECT id, slug, title, COALESCE(client_name,''), sector, location, year_completed, COALESCE(scope,''), COALESCE(challenge,''), COALESCE(solution,''), COALESCE(body,''), COALESCE(cover_image,''), gallery, is_featured, is_published
 		FROM projects WHERE slug=$1 AND is_published`, slug).
-		Scan(&p.ID, &p.Slug, &p.Title, &p.ClientName, &p.Sector, &p.Location, &p.YearCompleted, &p.Scope, &p.Body, &p.CoverImage, &p.IsFeatured)
+		Scan(&p.ID, &p.Slug, &p.Title, &p.ClientName, &p.Sector, &p.Location, &p.YearCompleted, &p.Scope, &p.Challenge, &p.Solution, &p.Body, &p.CoverImage, &galleryRaw, &p.IsFeatured, &p.IsPublished)
 	if err == sql.ErrNoRows {
 		httpx.Error(w, 404, "NOT_FOUND", "Project not found", nil)
 		return
+	} else if err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to load project", nil)
+		return
+	}
+	if len(galleryRaw) > 0 {
+		p.Gallery = galleryRaw
+	} else {
+		p.Gallery = json.RawMessage("[]")
 	}
 	httpx.JSON(w, 200, p)
 }
@@ -427,6 +478,10 @@ func (h *PublicHandler) Testimonials(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&t.ID, &t.AuthorName, &t.AuthorLocation, &t.Quote, &t.Rating)
 		out = append(out, t)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate testimonials", nil)
+		return
+	}
 	httpx.JSON(w, 200, out)
 }
 
@@ -438,6 +493,8 @@ var publicSettingsAllowlist = map[string]bool{
 	"social":         true,
 	"usd_rate":       true,
 	"homepage_stats": true,
+	"footer":         true,
+	"why_dhara":      true,
 }
 
 func (h *PublicHandler) PublicSettings(w http.ResponseWriter, r *http.Request) {
@@ -456,28 +513,32 @@ func (h *PublicHandler) PublicSettings(w http.ResponseWriter, r *http.Request) {
 			out[key] = string(raw)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to iterate settings", nil)
+		return
+	}
 	httpx.JSON(w, 200, out)
 }
 
 // --- Leads (§4.6, §5.4, §6.1) ---
 
 type leadRequest struct {
-	LeadType                string  `json:"lead_type"`
-	PropertyID              *string `json:"property_id"`
-	Name                    string  `json:"name"`
-	Email                   string  `json:"email"`
-	Phone                   string  `json:"phone"`
-	Message                 string  `json:"message"`
+	LeadType                string   `json:"lead_type"`
+	PropertyID              *string  `json:"property_id"`
+	Name                    string   `json:"name"`
+	Email                   string   `json:"email"`
+	Phone                   string   `json:"phone"`
+	Message                 string   `json:"message"`
 	OfferAmountLKR          *float64 `json:"offer_amount_lkr"`
-	PreferredInspectionDate *string `json:"preferred_inspection_date"`
-	PreferredInspectionSlot *string `json:"preferred_inspection_slot"`
-	SourceURL               string  `json:"source_url"`
-	UTMSource               string  `json:"utm_source"`
-	UTMMedium               string  `json:"utm_medium"`
-	UTMCampaign             string  `json:"utm_campaign"`
-	Consent                 bool    `json:"consent"`
-	TurnstileToken          string  `json:"turnstile_token"`
-	Honeypot                string  `json:"website"` // honeypot field, must stay empty (NFR-SEC-002)
+	PreferredInspectionDate *string  `json:"preferred_inspection_date"`
+	PreferredInspectionSlot *string  `json:"preferred_inspection_slot"`
+	SourceURL               string   `json:"source_url"`
+	UTMSource               string   `json:"utm_source"`
+	UTMMedium               string   `json:"utm_medium"`
+	UTMCampaign             string   `json:"utm_campaign"`
+	Consent                 bool     `json:"consent"`
+	TurnstileToken          string   `json:"turnstile_token"`
+	Honeypot                string   `json:"website"` // honeypot field, must stay empty (NFR-SEC-002)
 }
 
 // POST /api/v1/leads — FR-INQ-001/002/004/006/007/008/009.

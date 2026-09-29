@@ -8,7 +8,8 @@ export const metadata = { title: "Projects" };
 
 const sectors = ["Residential", "Commercial", "Industrial", "Hospitality", "Infrastructure"];
 
-export default async function ProjectsPage({ searchParams }: { searchParams: { sector?: string } }) {
+export default async function ProjectsPage(props: { searchParams: Promise<{ sector?: string }> }) {
+  const searchParams = await props.searchParams;
   const projects = await fetchProjects(searchParams.sector);
 
   return (
@@ -29,16 +30,16 @@ export default async function ProjectsPage({ searchParams }: { searchParams: { s
 
       <div className="container-content py-14">
         <Reveal className="flex flex-wrap gap-2">
-          <Link
+          <a
             href="/projects"
             className={`border px-4 py-1.5 text-xs font-medium transition-colors ${
               !searchParams.sector ? "border-ink bg-ink text-stone-paper" : "border-stone-line text-ink-soft hover:border-brass hover:text-brass-dark"
             }`}
           >
             All
-          </Link>
+          </a>
           {sectors.map((s) => (
-            <Link
+            <a
               key={s}
               href={`/projects?sector=${s}`}
               className={`border px-4 py-1.5 text-xs font-medium transition-colors ${
@@ -46,7 +47,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: { s
               }`}
             >
               {s}
-            </Link>
+            </a>
           ))}
         </Reveal>
 

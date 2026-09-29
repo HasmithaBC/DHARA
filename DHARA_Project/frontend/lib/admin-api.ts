@@ -4,7 +4,7 @@
 // localStorage for simplicity in this reference build; a production hand-off
 // may prefer httpOnly cookies issued by a small Next.js route handler instead.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8080/api/v1";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -50,11 +50,14 @@ async function tryRefresh(): Promise<boolean> {
 
 export async function adminFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const token = getToken();
-  const headers = {
-    ...(options.headers || {}),
-    Authorization: token ? `Bearer ${token}` : "",
-    ...(options.body ? { "Content-Type": "application/json" } : {}),
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  const headers: Record<string, string> = {
+    ...((options.headers as Record<string, string>) || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
+  if (options.body && !isFormData && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
   let res = await fetch(`${API_BASE}/admin${path}`, { ...options, headers });
   if (res.status === 401) {
     const refreshed = await tryRefresh();
@@ -76,6 +79,20 @@ export async function adminJSON<T>(path: string, options: RequestInit = {}): Pro
     throw new Error(body?.error?.message || `Request failed (${res.status})`);
   }
   return (body.data ?? body) as T;
+}
+
+export async function uploadMedia(file: File): Promise<{ url: string; content_type: string; size: number }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await adminFetch("/media-upload", {
+    method: "POST",
+    body: formData,
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body?.error?.message || `Upload failed (${res.status})`);
+  }
+  return (body.data ?? body) as { url: string; content_type: string; size: number };
 }
 
 export { API_BASE };

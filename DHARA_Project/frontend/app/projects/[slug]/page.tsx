@@ -25,7 +25,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   if (!project) notFound();
 
   const otherProjects = allProjects.filter((p) => p.slug !== slug).slice(0, 3);
-  const gallery: string[] = project.gallery_images ?? [];
+  const gallery: string[] = (project.gallery && project.gallery.length > 0) ? project.gallery : (project.gallery_images ?? []);
 
   return (
     <div>
@@ -70,7 +70,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           )}
 
           {/* Gallery */}
-          {gallery.length > 1 && (
+          {gallery.length > 0 && (
             <div className="mt-10">
               <Reveal>
                 <p className="eyebrow mb-4">Project Gallery</p>

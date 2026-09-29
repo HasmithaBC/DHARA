@@ -7,11 +7,14 @@ import {
   FALLBACK_TESTIMONIALS,
 } from "./fallback-data";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8080/api/v1";
 
 async function safeFetch<T>(path: string, fallback: T, revalidate = 60): Promise<T> {
   try {
-    const res = await fetch(`${API_BASE}${path}`, { next: { revalidate } });
+    const res = await fetch(`${API_BASE}${path}`, {
+      next: { revalidate },
+      signal: AbortSignal.timeout(1500),
+    });
     if (!res.ok) return fallback;
     const json = await res.json();
     return (json.data ?? json) as T;
@@ -30,11 +33,25 @@ export interface ListResult<T> {
 export async function fetchProperties(params: Record<string, string> = {}): Promise<ListResult<PropertySummary>> {
   const qs = new URLSearchParams(params).toString();
   try {
-    const res = await fetch(`${API_BASE}/properties?${qs}`, { next: { revalidate: 60 } });
+    const res = await fetch(`${API_BASE}/properties?${qs}`, {
+      next: { revalidate: 60 },
+      signal: AbortSignal.timeout(1500),
+    });
     if (!res.ok) throw new Error("bad response");
     return await res.json();
   } catch {
-    return { data: FALLBACK_PROPERTIES, meta: { page: 1, per_page: 12, total: FALLBACK_PROPERTIES.length, total_pages: 1 } };
+    // Apply client-side filtering to fallback data so filters still work
+    // even when the backend is unreachable (e.g. local frontend-only preview).
+    let filtered = FALLBACK_PROPERTIES;
+    if (params.category) filtered = filtered.filter((p) => p.category === params.category.toUpperCase());
+    if (params.type) filtered = filtered.filter((p) => p.listing_type === params.type.toUpperCase());
+    if (params.district) filtered = filtered.filter((p) => p.district_name === params.district);
+    if (params.featured === "true") filtered = filtered.filter((p) => p.is_featured);
+    if (params.beds) filtered = filtered.filter((p) => p.bedrooms != null && (params.beds === "5" ? p.bedrooms >= 5 : p.bedrooms === Number(params.beds)));
+    if (params.baths) filtered = filtered.filter((p) => p.bathrooms != null && p.bathrooms === Number(params.baths));
+    if (params.price_min) filtered = filtered.filter((p) => p.price_lkr != null && p.price_lkr >= Number(params.price_min));
+    if (params.price_max) filtered = filtered.filter((p) => p.price_lkr != null && p.price_lkr <= Number(params.price_max));
+    return { data: filtered, meta: { page: 1, per_page: 12, total: filtered.length, total_pages: 1 } };
   }
 }
 

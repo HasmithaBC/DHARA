@@ -4,14 +4,8 @@ import { PropertySummary } from "@/lib/types";
 import { categoryLabel, listingTypeLabel } from "@/lib/format";
 import PriceTag from "@/components/PriceTag";
 
-const categoryPath: Record<string, string> = {
-  LAND: "lands",
-  HOUSE: "houses",
-  COMMERCIAL: "commercial",
-};
-
 export default function PropertyCard({ property }: { property: PropertySummary }) {
-  const detailHref = `/properties/${categoryPath[property.category] ?? "other"}/${property.slug}`;
+  const detailHref = `/properties/${property.slug}`;
   const keyFacts =
     property.category === "LAND"
       ? property.land_extent_perches
@@ -28,9 +22,9 @@ export default function PropertyCard({ property }: { property: PropertySummary }
   return (
     <Link
       href={detailHref}
-      className="group block border border-stone-line bg-stone-paper transition-all duration-300 hover:-translate-y-1 hover:border-brass hover:shadow-xl"
+      className="group flex h-full flex-col border border-stone-line bg-stone-paper transition-all duration-300 hover:-translate-y-1 hover:border-brass hover:shadow-xl"
     >
-      <div className="relative aspect-[4/3] w-full overflow-hidden bg-stone-fog">
+      <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-stone-fog">
         {property.cover_url && (
           <Image
             src={property.cover_url}

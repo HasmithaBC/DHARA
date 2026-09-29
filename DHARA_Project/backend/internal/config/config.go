@@ -25,6 +25,7 @@ type Config struct {
 	WhatsAppPhoneID  string
 	WhatsAppSalesNum string
 	HighIntentLKR    float64
+	FrontendBaseURL  string
 }
 
 func getEnv(key, fallback string) string {
@@ -54,12 +55,12 @@ func getEnvFloat(key string, fallback float64) float64 {
 
 func Load() *Config {
 	return &Config{
-		Port:             getEnv("PORT", "8080"),
+		Port:             getEnv("PORT", "8081"),
 		DatabaseURL:      getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/dhara?sslmode=disable"),
 		JWTSecret:        getEnv("JWT_SECRET", "dev-secret-change-me"),
 		JWTAccessTTLMin:  getEnvInt("JWT_ACCESS_TTL_MIN", 60),
 		JWTRefreshTTLHrs: getEnvInt("JWT_REFRESH_TTL_HRS", 168),
-		AllowedOrigins:   getEnv("ALLOWED_ORIGINS", "http://localhost:3000"),
+		AllowedOrigins:   getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000"),
 		SignedURLSecret:  getEnv("SIGNED_URL_SECRET", "dev-signed-url-secret"),
 		SendGridAPIKey:   getEnv("SENDGRID_API_KEY", ""),
 		SendGridFrom:     getEnv("SENDGRID_FROM_EMAIL", "no-reply@dharact.com"),
@@ -73,5 +74,6 @@ func Load() *Config {
 		WhatsAppPhoneID:  getEnv("WHATSAPP_PHONE_NUMBER_ID", ""),
 		WhatsAppSalesNum: getEnv("WHATSAPP_SALES_NUMBER", ""),
 		HighIntentLKR:    getEnvFloat("HIGH_INTENT_OFFER_THRESHOLD_LKR", 10000000),
+		FrontendBaseURL:  getEnv("FRONTEND_BASE_URL", getEnv("SITE_BASE_URL", "https://dharact.com")),
 	}
 }

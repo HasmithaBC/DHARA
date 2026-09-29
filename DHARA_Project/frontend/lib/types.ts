@@ -85,9 +85,10 @@ export interface Service {
   title: string;
   summary: string;
   body?: string;
-  icon: string;
+  icon?: string;
   hero_image: string;
   sort_order: number;
+  is_published?: boolean;
 }
 
 export interface Project {
@@ -99,11 +100,15 @@ export interface Project {
   location: string;
   year_completed: number;
   scope?: string;
+  challenge?: string;
+  solution?: string;
   body?: string;
   description?: string;
   cover_image: string;
+  gallery?: string[];
   gallery_images?: string[];
   is_featured: boolean;
+  is_published?: boolean;
 }
 
 export interface Testimonial {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { fetchProperties } from "@/lib/api";
 import PropertyCard from "@/components/PropertyCard";
+import FeaturedPropertyCatalog from "@/components/FeaturedPropertyCatalog";
 import { StaggerGroup, StaggerItem } from "@/components/motion/StaggerGroup";
 import MobileFilterSheet from "@/components/MobileFilterSheet";
 
@@ -8,6 +9,7 @@ export interface CatalogueProps {
   title: string;
   searchParams: Record<string, string | string[] | undefined>;
   forced?: Record<string, string>;
+  showFeatured?: boolean;
 }
 
 const districts = [
@@ -24,10 +26,19 @@ function toQuery(sp: Record<string, string | string[] | undefined>, forced?: Rec
   return { ...q, ...(forced ?? {}) };
 }
 
-export default async function PropertyCatalogue({ title, searchParams, forced }: CatalogueProps) {
+export default async function PropertyCatalogue({ title, searchParams, forced, showFeatured = false }: CatalogueProps) {
   const params = toQuery(searchParams, forced);
   const page = Number(params.page || "1");
-  const result = await fetchProperties({ ...params, page: String(page), per_page: "12" });
+  const [result, featured] = await Promise.all([
+    fetchProperties({ ...params, page: String(page), per_page: "12" }),
+    showFeatured
+      ? fetchProperties({
+          ...Object.fromEntries(Object.entries(params).filter(([k]) => !["page", "per_page", "sort"].includes(k))),
+          featured: "true",
+          per_page: "4",
+        })
+      : Promise.resolve(null),
+  ]);
   const total = result.meta?.total ?? result.data.length;
   const totalPages = result.meta?.total_pages ?? 1;
 
@@ -93,6 +104,23 @@ export default async function PropertyCatalogue({ title, searchParams, forced }:
             {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}{n === 5 ? "+" : ""}</option>)}
           </select>
         </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-ink-soft">Bathrooms</label>
+          <select name="baths" defaultValue={params.baths || ""} className="w-full border border-stone-line px-2 py-2">
+            <option value="">Any</option>
+            {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}{n === 5 ? "+" : ""}</option>)}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-soft">Min Perches</label>
+            <input type="number" step="any" name="perches_min" defaultValue={params.perches_min || ""} className="w-full border border-stone-line px-2 py-2" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-soft">Max Perches</label>
+            <input type="number" step="any" name="perches_max" defaultValue={params.perches_max || ""} className="w-full border border-stone-line px-2 py-2" />
+          </div>
+        </div>
         {Object.entries(forced ?? {}).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
         <button type="submit" className="btn-primary w-full justify-center transition-transform hover:-translate-y-0.5">
           Apply Filters
@@ -109,6 +137,16 @@ export default async function PropertyCatalogue({ title, searchParams, forced }:
       </nav>
       <h1 className="mt-3 font-display text-3xl text-ink">{title}</h1>
       <p className="mt-1 text-sm text-ink-soft">{total} properties found</p>
+
+      {featured && (
+        <div className="mt-8">
+          <FeaturedPropertyCatalog
+            properties={featured.data}
+            title="Properties worth a closer look"
+            description="Start with Dhara's featured listings, then refine the full catalogue below."
+          />
+        </div>
+      )}
 
       <div className="mt-8 grid gap-10 lg:grid-cols-[280px_1fr]">
         {/* Filter rail (desktop sticky) / bottom-sheet (mobile) — FR-LST-002, NFR-UI-006 */}

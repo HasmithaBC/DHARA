@@ -24,10 +24,7 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 	r.Use(middleware.SecurityHeaders)
 	r.Use(middleware.CORS(cfg.AllowedOrigins))
 
-	// Serves files written by AdminHandler.UploadMedia. The directory lives outside the
-	// web root conceptually (it's not part of the frontend build); this route is the only
-	// way its contents become reachable, and it only ever serves what was written through
-	// the validated upload endpoint.
+	// Serves files written by AdminHandler.UploadMedia.
 	os.MkdirAll(cfg.MediaUploadDir, 0o750)
 	r.Handle("/uploads/*", http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.MediaUploadDir))))
 
@@ -54,6 +51,7 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 			r.Get("/projects/{slug}", pub.GetProject)
 			r.Get("/testimonials", pub.Testimonials)
 			r.Get("/settings/public", pub.PublicSettings)
+			r.Get("/pages/{slug}", pub.GetPage) // About / Privacy / Terms copy edited in the admin
 			r.Get("/documents/{id}/download", pub.DownloadDocument)
 			r.Get("/newsletter/confirm", pub.NewsletterConfirm)
 			r.Get("/newsletter/unsubscribe", pub.NewsletterUnsubscribe)
@@ -78,48 +76,63 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(middleware.RequireAuth(cfg.JWTSecret))
 
+			// Any logged-in role: their own profile
+			r.Get("/me", adm.Me)
+			r.Patch("/me", adm.UpdateMe)
+			r.Patch("/me/password", adm.ChangeMyPassword)
+
 			// Sales Manager + Administrator: listings & leads
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole(roleSales, roleAdmin))
-				r.Get("/properties", adm.ListAllProperties)
+				r.Get("/properties", adm.ListAllPropertiesV2)
 				r.Post("/properties", adm.CreateProperty)
 				r.Get("/properties/{id}", adm.GetPropertyAdmin)
 				r.Patch("/properties/{id}", adm.UpdateProperty)
 				r.Delete("/properties/{id}", adm.ArchiveProperty)
 				r.Post("/properties/{id}/status", adm.TransitionStatus)
 				r.Post("/properties/{id}/duplicate", adm.DuplicateProperty)
-				r.Post("/properties/bulk", adm.BulkAction)
-				r.Post("/properties/{id}/images", adm.AddImage)
+				r.Post("/properties/bulk", adm.BulkActionV2)
+				r.Get("/property-options", adm.PropertyOptions)
+				r.Post("/properties/{id}/images", adm.AddImageV2)
 				r.Post("/properties/{id}/media-upload", adm.UploadMedia)
 				r.Delete("/properties/{id}/images/{imageId}", adm.DeleteImage)
 				r.Patch("/properties/{id}/images/order", adm.ReorderImages)
-				r.Post("/properties/{id}/documents", adm.AddDocument)
+				r.Patch("/properties/{id}/images/{imageId}", adm.UpdateImage)
+				r.Post("/properties/{id}/documents", adm.AddDocumentV2)
+				r.Patch("/properties/{id}/documents/{docId}", adm.UpdateDocument)
 				r.Delete("/properties/{id}/documents/{docId}", adm.DeleteDocument)
 
-				r.Get("/leads", adm.ListLeads)
-				r.Get("/leads/export", adm.ExportLeads)
-				r.Get("/leads/{id}", adm.GetLead)
-				r.Patch("/leads/{id}", adm.UpdateLead)
+				r.Get("/leads", adm.ListLeadsV2)
+				r.Get("/leads/export", adm.ExportLeadsV2)
+				r.Get("/leads/{id}", adm.GetLeadV2)
+				r.Patch("/leads/{id}", adm.UpdateLeadV2)
 				r.Post("/leads/{id}/erase", adm.EraseLead)
+				r.Get("/staff", adm.Staff)
 
-				r.Get("/dashboard", adm.Dashboard)
+				r.Get("/dashboard", adm.DashboardV2)
 			})
 
 			// Content Editor + Administrator: corporate content
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole(roleEdit, roleAdmin))
-				r.Get("/services", adm.ListServicesAdmin)
+				r.Post("/media-upload", adm.UploadMedia) // hero / cover images for services and projects
+				r.Get("/services", adm.ListServicesAdminV2)
 				r.Post("/services", adm.CreateService)
+				r.Get("/services/{id}", adm.GetServiceAdmin)
 				r.Patch("/services/{id}", adm.UpdateService)
 				r.Delete("/services/{id}", adm.DeleteService)
-				r.Get("/projects", adm.ListProjectsAdmin)
+				r.Get("/projects", adm.ListProjectsAdminV2)
 				r.Post("/projects", adm.CreateProject)
+				r.Get("/projects/{id}", adm.GetProjectAdmin)
 				r.Patch("/projects/{id}", adm.UpdateProject)
 				r.Delete("/projects/{id}", adm.DeleteProject)
-				r.Get("/testimonials", adm.ListTestimonialsAdmin)
+				r.Get("/testimonials", adm.ListTestimonialsAdminV2)
 				r.Post("/testimonials", adm.CreateTestimonial)
 				r.Patch("/testimonials/{id}", adm.UpdateTestimonial)
 				r.Delete("/testimonials/{id}", adm.DeleteTestimonial)
+				r.Get("/pages", adm.ListPagesAdmin)
+				r.Get("/pages/{slug}", adm.GetPageAdmin)
+				r.Patch("/pages/{slug}", adm.UpsertPage)
 			})
 
 			// Administrator only: settings, users, audit log
@@ -127,10 +140,13 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 				r.Use(middleware.RequireRole(roleAdmin))
 				r.Get("/settings", adm.GetSettings)
 				r.Patch("/settings", adm.UpdateSettings)
-				r.Get("/users", adm.ListUsers)
-				r.Post("/users", adm.CreateUser)
-				r.Delete("/users/{id}", adm.DeactivateUser)
-				r.Get("/audit-log", adm.AuditLog)
+				r.Get("/users", adm.ListUsersV2)
+				r.Post("/users", adm.CreateUserV2)
+				r.Patch("/users/{id}", adm.UpdateUser)
+				r.Delete("/users/{id}", adm.DeactivateUserV2)
+				r.Post("/users/{id}/send-reset", adm.SendUserReset)
+				r.Get("/audit-log", adm.AuditLogV2)
+				r.Get("/audit-log/export", adm.AuditLogExport)
 			})
 		})
 	})

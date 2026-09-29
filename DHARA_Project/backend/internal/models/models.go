@@ -162,28 +162,34 @@ type Lead struct {
 }
 
 type Service struct {
-	ID        string `json:"id"`
-	Slug      string `json:"slug"`
-	Title     string `json:"title"`
-	Summary   string `json:"summary"`
-	Body      string `json:"body,omitempty"`
-	Icon      string `json:"icon"`
-	HeroImage string `json:"hero_image"`
-	SortOrder int    `json:"sort_order"`
+	ID          string `json:"id"`
+	Slug        string `json:"slug"`
+	Title       string `json:"title"`
+	Summary     string `json:"summary"`
+	Body        string `json:"body,omitempty"`
+	Icon        string `json:"icon"`
+	HeroImage   string `json:"hero_image"`
+	SortOrder   int    `json:"sort_order"`
+	IsPublished bool   `json:"is_published"`
 }
 
 type Project struct {
-	ID            string `json:"id"`
-	Slug          string `json:"slug"`
-	Title         string `json:"title"`
-	ClientName    string `json:"client_name,omitempty"`
-	Sector        string `json:"sector"`
-	Location      string `json:"location"`
-	YearCompleted int    `json:"year_completed"`
-	Scope         string `json:"scope,omitempty"`
-	Body          string `json:"body,omitempty"`
-	CoverImage    string `json:"cover_image"`
-	IsFeatured    bool   `json:"is_featured"`
+	ID            string          `json:"id"`
+	Slug          string          `json:"slug"`
+	Title         string          `json:"title"`
+	ClientName    string          `json:"client_name,omitempty"`
+	Sector        string          `json:"sector"`
+	Location      string          `json:"location"`
+	YearCompleted int             `json:"year_completed"`
+	Scope         string          `json:"scope,omitempty"`
+	Challenge     string          `json:"challenge,omitempty"`
+	Solution      string          `json:"solution,omitempty"`
+	Body          string          `json:"body,omitempty"`
+	CoverImage    string          `json:"cover_image"`
+	Gallery       json.RawMessage `json:"gallery,omitempty"`
+	BOQMetrics    json.RawMessage `json:"boq_metrics,omitempty"`
+	IsFeatured    bool            `json:"is_featured"`
+	IsPublished   bool            `json:"is_published"`
 }
 
 type Testimonial struct {

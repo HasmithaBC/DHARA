@@ -1,45 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { fetchProjects, fetchService } from "@/lib/api";
+import { fetchProjects, fetchService, fetchServices } from "@/lib/api";
 import Reveal from "@/components/motion/Reveal";
-import { StaggerGroup, StaggerItem } from "@/components/motion/StaggerGroup";
-
-// Per-service supplementary image galleries mapped to available assets
-const SERVICE_GALLERY: Record<string, string[]> = {
-  "civil-construction": [
-    "/images/services/consulting1.webp",
-    "/images/services/consulting2.webp",
-    "/images/services/consulting3.webp",
-    "/images/services/buildingPlan.webp",
-  ],
-  "tower-foundations": [
-    "/images/services/RoadSafety.webp",
-    "/images/services/geosyntheticalSol (1).webp",
-  ],
-  "architectural-design": [
-    "/images/services/ArchitecturalDesign.webp",
-    "/images/services/buildingPlan.webp",
-  ],
-  "mep": [
-    "/images/services/homenetworking.webp",
-    "/images/services/homenetworking2.webp",
-    "/images/services/AirConditioning.webp",
-  ],
-  "interiors": [
-    "/images/services/flooring.webp",
-    "/images/services/protectiveCoating.webp",
-    "/images/services/S1.png",
-    "/images/services/S2.png",
-  ],
-  "boq-estimation": [
-    "/images/services/BOQ.webp",
-    "/images/services/Estimating.webp",
-  ],
-  "3d-visualization": [
-    "/images/services/3Ddesign.webp",
-  ],
-};
+import Carousel from "@/components/Carousel";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -51,12 +15,23 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
+const SERVICE_TO_SECTOR: Record<string, string> = {
+  "tower-foundations": "Infrastructure",
+  "mep": "Industrial",
+};
+
 export default async function ServiceDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const service = await fetchService(slug);
+  const [service, allServices] = await Promise.all([
+    fetchService(slug),
+    fetchServices(),
+  ]);
+
   if (!service) notFound();
-  const relatedProjects = await fetchProjects();
-  const gallery = SERVICE_GALLERY[slug] ?? [];
+
+  const sector = SERVICE_TO_SECTOR[slug] || "Residential";
+  const relatedProjects = await fetchProjects(sector);
+  const otherServices = allServices.filter((s) => s.slug !== slug);
 
   // Parse body into paragraphs and bullet list
   const bodyText = service.body ?? service.summary;
@@ -112,27 +87,6 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
               })}
             </div>
           )}
-
-          {/* Gallery */}
-          {gallery.length > 0 && (
-            <div className="mt-10">
-              <p className="eyebrow mb-4">Gallery</p>
-              <StaggerGroup className={`grid gap-4 ${gallery.length >= 3 ? "sm:grid-cols-2 lg:grid-cols-3" : "sm:grid-cols-2"}`}>
-                {gallery.map((img, i) => (
-                  <StaggerItem key={i}>
-                    <div className="relative aspect-[4/3] overflow-hidden bg-stone-fog">
-                      <Image
-                        src={img}
-                        alt={`${service.title} — image ${i + 1}`}
-                        fill
-                        className="object-cover transition-transform duration-500 hover:scale-105"
-                      />
-                    </div>
-                  </StaggerItem>
-                ))}
-              </StaggerGroup>
-            </div>
-          )}
         </div>
 
         {/* Sidebar */}
@@ -147,31 +101,23 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
             </Link>
           </aside>
 
-          <aside className="border border-stone-line bg-stone-paper p-6">
-            <h3 className="font-display text-base text-ink">Other Services</h3>
-            <ul className="mt-3 space-y-2">
-              {[
-                { slug: "civil-construction", label: "Civil Construction" },
-                { slug: "tower-foundations", label: "Tower Foundations" },
-                { slug: "architectural-design", label: "Architectural Design" },
-                { slug: "mep", label: "MEP Systems" },
-                { slug: "interiors", label: "Interiors & Fit-Outs" },
-                { slug: "boq-estimation", label: "BOQ & Cost Auditing" },
-                { slug: "3d-visualization", label: "3D Visualisation" },
-              ]
-                .filter((s) => s.slug !== slug)
-                .map((s) => (
+          {otherServices.length > 0 && (
+            <aside className="border border-stone-line bg-stone-paper p-6">
+              <h3 className="font-display text-base text-ink">Other Services</h3>
+              <ul className="mt-3 space-y-2">
+                {otherServices.map((s) => (
                   <li key={s.slug}>
                     <Link
                       href={`/services/${s.slug}`}
                       className="text-sm text-ink underline decoration-stone-line underline-offset-4 transition-colors hover:text-brass-dark hover:decoration-brass"
                     >
-                      {s.label}
+                      {s.title}
                     </Link>
                   </li>
                 ))}
-            </ul>
-          </aside>
+              </ul>
+            </aside>
+          )}
 
           <aside className="border border-stone-line bg-concrete-900 p-6 text-stone-paper">
             <h3 className="font-display text-base">Contact Us Directly</h3>
@@ -195,41 +141,38 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
       </div>
 
       {/* Related Projects */}
-      {relatedProjects.length > 0 && (
-        <div className="border-t border-stone-line bg-stone-paper py-14">
-          <div className="container-content">
-            <Reveal>
-              <p className="eyebrow">Portfolio</p>
-              <h2 className="mt-2 font-display text-2xl text-ink">Related Projects</h2>
-            </Reveal>
-            <StaggerGroup className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {relatedProjects.slice(0, 3).map((p) => (
-                <StaggerItem key={p.id}>
-                  <Link href={`/projects/${p.slug}`} className="group block">
-                    <div className="relative aspect-[4/3] overflow-hidden bg-stone-fog">
-                      <Image
-                        src={p.cover_image}
-                        alt={p.title}
-                        fill
-                        className="object-cover transition-transform duration-500 group-hover:scale-105"
-                      />
-                    </div>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className="font-display text-base text-ink transition-colors group-hover:text-brass-dark">{p.title}</span>
-                      <span className="text-xs text-ink-soft">{p.location}, {p.year_completed}</span>
-                    </div>
-                  </Link>
-                </StaggerItem>
+      <div className="border-t border-stone-line bg-stone-paper py-14">
+        <div className="container-content">
+          <Reveal>
+            <p className="eyebrow">Portfolio</p>
+            <h2 className="mt-2 font-display text-2xl text-ink">Related Projects</h2>
+          </Reveal>
+          <div className="mt-8">
+            <Carousel 
+              items={relatedProjects.map((p) => (
+                <Link key={p.id} href={`/projects/${p.slug}`} className="group flex flex-col h-full">
+                  <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-stone-fog">
+                    <Image
+                      src={p.cover_image}
+                      alt={p.title}
+                      fill
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                  </div>
+                  <div className="mt-2 flex flex-1 flex-col">
+                    <span className="font-display text-base text-ink transition-colors group-hover:text-brass-dark">{p.title}</span>
+                    <span className="mt-auto text-xs text-ink-soft">{p.location}, {p.year_completed}</span>
+                  </div>
+                </Link>
               ))}
-            </StaggerGroup>
-            <div className="mt-8">
-              <Link href="/projects" className="btn-outline inline-flex transition-transform hover:-translate-y-0.5">
-                View All Projects
-              </Link>
-            </div>
+              itemsPerView={3}
+              gridClassName="sm:grid-cols-2 lg:grid-cols-3"
+              viewAllLink="/projects"
+              viewAllText="View All Projects"
+            />
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
