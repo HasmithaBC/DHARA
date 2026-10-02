@@ -9,10 +9,12 @@ export default function InquiryPanel({
   property,
   price,
   whatsappLink,
+  telHref = "tel:+94763774551",
 }: {
   property: PropertyDetail;
   price: string;
   whatsappLink: string;
+  telHref?: string;
 }) {
   const [mode, setMode] = useState<"inquiry" | "inspection">("inquiry");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
@@ -67,7 +69,7 @@ export default function InquiryPanel({
         <div className="mt-1 text-xs text-ink-soft">Ref: {property.reference_code}</div>
 
         <div className="mt-5 grid grid-cols-3 gap-2">
-          <a href="tel:+94763774551" className="btn-outline justify-center px-2 text-xs">Call</a>
+          <a href={telHref} className="btn-outline justify-center px-2 text-xs">Call</a>
           <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="btn-brass justify-center px-2 text-xs">WhatsApp</a>
           <button onClick={() => document.getElementById("inquiry-form")?.scrollIntoView({ behavior: "smooth" })} className="btn-primary justify-center px-2 text-xs">
             Inquire
@@ -147,7 +149,7 @@ export default function InquiryPanel({
         className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-2 border-t border-stone-line bg-stone-paper p-3 shadow-[0_-4px_16px_-4px_rgba(33,34,30,0.15)] lg:hidden"
         style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
       >
-        <a href="tel:+94763774551" className="btn-outline justify-center px-2 text-xs">Call</a>
+        <a href={telHref} className="btn-outline justify-center px-2 text-xs">Call</a>
         <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="btn-brass justify-center px-2 text-xs">WhatsApp</a>
         <button
           onClick={() => document.getElementById("inquiry-form")?.scrollIntoView({ behavior: "smooth", block: "center" })}

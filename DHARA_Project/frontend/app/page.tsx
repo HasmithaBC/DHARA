@@ -1,6 +1,8 @@
+import { getContact } from "@/lib/contact";
 import Link from "next/link";
 import Image from "next/image";
-import { fetchProjects, fetchProperties, fetchServices, fetchTestimonials } from "@/lib/api";
+import SmartMedia from "@/components/SmartMedia";
+import { fetchProjects, fetchProperties, fetchServices, fetchSettings, fetchTestimonials } from "@/lib/api";
 import FeaturedPropertyCatalog from "@/components/FeaturedPropertyCatalog";
 import Reveal from "@/components/motion/Reveal";
 import Counter from "@/components/motion/Counter";
@@ -22,19 +24,33 @@ const STAT_ICONS = [IconHardHat, IconBuilding, IconCheckShield, IconCrane];
 const WHY_DHARA_ICONS = [IconHardHat, IconBlueprint, IconCheckShield];
 
 export default async function HomePage() {
-  const [featured, services, projects, testimonials] = await Promise.all([
+  const contact = await getContact();
+  const [featured, allListings, services, projects, testimonials, settings] = await Promise.all([
     fetchProperties({ featured: "true", per_page: "12" }),
+    fetchProperties({ per_page: "1" }),
     fetchServices(),
     fetchProjects(),
     fetchTestimonials(),
+    fetchSettings(),
   ]);
 
+  // Numbers come from Admin → Settings → Homepage stats; the listing count is live from the database.
+  const hs = settings.homepage_stats;
   const stats = [
-    { label: "Years of Experience", value: "15+" },
-    { label: "Completed Projects", value: "120+" },
-    { label: "Trusted Clients", value: "300+" },
-    { label: "Properties Available", value: String(featured.meta?.total ?? featured.data.length) },
+    { label: "Years of Experience", value: `${hs?.years_experience ?? 15}+` },
+    { label: "Completed Projects", value: `${hs?.completed_projects ?? 120}+` },
+    { label: "Trusted Clients", value: `${hs?.trusted_clients ?? 300}+` },
+    { label: "Properties Available", value: String(allListings.meta?.total ?? allListings.data.length) },
   ];
+
+  const whyDhara =
+    settings.why_dhara && settings.why_dhara.length > 0
+      ? settings.why_dhara
+      : [
+          { title: `${hs?.years_experience ?? 15}+ Years in Operation`, body: "A track record spanning civil works, MEP, tower foundations and property development across Sri Lanka." },
+          { title: "End-to-End Capability", body: "From land acquisition and design through to construction, fit-out and handover — one accountable team." },
+          { title: "Direct From Developer", body: "Every listing is Dhara-built or Dhara-owned — no intermediaries, no third-party commissions." },
+        ];
 
   return (
     <div>
@@ -177,10 +193,9 @@ export default async function HomePage() {
             items={projects.filter((p) => p.is_featured).map((p) => (
               <Link key={p.id} href={`/projects/${p.slug}`} className="group block h-full">
                 <div className="relative aspect-[4/3] overflow-hidden bg-stone-fog">
-                  <Image
+                  <SmartMedia
                     src={p.cover_image}
                     alt={p.title}
-                    fill
                     className="object-cover transition-transform duration-500 group-hover:scale-110"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-concrete-900/60 via-concrete-900/0 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
@@ -239,11 +254,7 @@ export default async function HomePage() {
           <h2 className="mt-2 font-display text-2xl text-ink">Built on Trust, Delivered in Concrete</h2>
         </Reveal>
         <StaggerGroup className="mt-8 grid gap-8 md:grid-cols-3">
-          {[
-            { title: "15+ Years in Operation", body: "A track record spanning civil works, MEP, tower foundations and property development across Sri Lanka." },
-            { title: "End-to-End Capability", body: "From land acquisition and design through to construction, fit-out and handover — one accountable team." },
-            { title: "Direct From Developer", body: "Every listing is Dhara-built or Dhara-owned — no intermediaries, no third-party commissions." },
-          ].map((f, i) => {
+          {whyDhara.map((f, i) => {
             const Icon = WHY_DHARA_ICONS[i % WHY_DHARA_ICONS.length];
             return (
               <StaggerItem key={f.title} className="group">
@@ -274,7 +285,7 @@ export default async function HomePage() {
               Contact Us
             </Link>
             <a
-              href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "94763774551"}`}
+              href={`https://wa.me/${contact.whatsapp}`}
               className="btn-outline border-stone-paper text-stone-paper transition-transform hover:-translate-y-0.5 hover:bg-stone-paper hover:text-ink"
             >
               WhatsApp

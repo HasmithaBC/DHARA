@@ -1,14 +1,24 @@
-export const metadata = { title: "Privacy Policy" };
+import { fetchPage } from "@/lib/api";
+import RichText from "@/components/RichText";
 
-export default function PrivacyPolicyPage() {
+export async function generateMetadata() {
+  const page = await fetchPage("privacy-policy");
+  return { title: page?.meta_title || page?.title || "Privacy Policy", description: page?.meta_description || undefined };
+}
+
+export default async function Page() {
+  // Edited in Admin → Pages. Falls back to a notice until the copy has been saved once.
+  const page = await fetchPage("privacy-policy");
   return (
     <div className="container-content max-w-3xl py-14">
-      <h1 className="font-display text-3xl text-ink">Privacy Policy</h1>
-      <p className="mt-6 text-sm leading-relaxed text-ink-soft">
-        Placeholder content — final legal copy is to be supplied by Dhara Construction and
-        Technology (Pvt) Ltd per SRS Appendix E / A07 and inserted here via the CMS static
-        pages module (FR-CNT-004), including the data-retention period for leads.
-      </p>
+      <h1 className="font-display text-3xl text-ink">{page?.title || "Privacy Policy"}</h1>
+      {page?.body ? (
+        <RichText text={page.body} className="mt-6" />
+      ) : (
+        <p className="mt-6 text-sm leading-relaxed text-ink-soft">
+          Our privacy policy is being finalised and will be published here shortly.
+        </p>
+      )}
     </div>
   );
 }

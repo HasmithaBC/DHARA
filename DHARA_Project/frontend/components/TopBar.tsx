@@ -1,4 +1,5 @@
 import { fetchSettings } from "@/lib/api";
+import { resolveContact } from "@/lib/contact";
 import { IconClock, IconFacebook, IconInstagram, IconLinkedIn, IconMail, IconPhone, IconPinterest } from "@/components/icons";
 
 const SOCIAL_ICONS: Record<string, (props: { className?: string }) => JSX.Element> = {
@@ -15,10 +16,7 @@ const SOCIAL_ICONS: Record<string, (props: { className?: string }) => JSX.Elemen
  */
 export default async function TopBar() {
   const settings = await fetchSettings();
-  const contact = settings.contact ?? {
-    phone: "+94763774551",
-    email: "kosala@dharact.com",
-  };
+  const contact = resolveContact(settings);
   const social = settings.social ?? {};
   const socialLinks = Object.entries(social).filter(([, url]) => !!url);
 
@@ -26,7 +24,7 @@ export default async function TopBar() {
     <div className="hidden border-b border-white/10 bg-concrete-900 text-stone-line lg:block">
       <div className="container-content flex h-9 items-center justify-between text-xs">
         <div className="flex items-center gap-6">
-          <a href={`tel:${contact.phone}`} className="flex items-center gap-1.5 transition-colors hover:text-brass-light">
+          <a href={contact.telHref} className="flex items-center gap-1.5 transition-colors hover:text-brass-light">
             <IconPhone className="h-3 w-3" />
             {contact.phone}
           </a>
@@ -36,7 +34,7 @@ export default async function TopBar() {
           </a>
           <span className="flex items-center gap-1.5 text-stone-line/70">
             <IconClock className="h-3 w-3" />
-            Mon – Sat, 8:30am – 5:30pm
+            {contact.hours}
           </span>
         </div>
         <div className="flex items-center gap-4">

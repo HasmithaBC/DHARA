@@ -1,6 +1,10 @@
 import Image from "next/image";
 import ContactForm from "@/components/ContactForm";
 import Reveal from "@/components/motion/Reveal";
+import { getContact } from "@/lib/contact";
+
+// Live content: contact details come from Admin → Settings.
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Contact",
@@ -8,7 +12,10 @@ export const metadata = {
     "Get in touch with Dhara Construction and Technology — civil engineering, construction, architectural design, MEP and property enquiries.",
 };
 
-export default function ContactPage({ searchParams }: { searchParams: { service?: string } }) {
+export default async function ContactPage(props: { searchParams: Promise<{ service?: string }> }) {
+  // Next.js 15/16 hands pages `searchParams` as a Promise.
+  const searchParams = await props.searchParams;
+  const contact = await getContact();
   return (
     <div>
       {/* Page header */}
@@ -39,33 +46,29 @@ export default function ContactPage({ searchParams }: { searchParams: { service?
               <div className="grid gap-6 sm:grid-cols-2">
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-widest text-ink-soft">Address</div>
-                  <div className="mt-2 text-ink">
-                    No. 535/1B, Kakunagahalanda Waththa,<br />
-                    Heiyanthuduwa, Sri Lanka
-                  </div>
+                  <div className="mt-2 whitespace-pre-line text-ink">{contact.address}</div>
                 </div>
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-widest text-ink-soft">Business Hours</div>
-                  <div className="mt-2 text-ink">Monday – Saturday</div>
-                  <div className="text-ink-soft">8:30 am – 5:30 pm</div>
+                  <div className="mt-2 whitespace-pre-line text-ink">{contact.hours}</div>
                 </div>
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-widest text-ink-soft">Phone</div>
-                  <a href="tel:+94763774551" className="mt-2 block text-ink underline decoration-brass underline-offset-4 transition-colors hover:text-brass-dark">
-                    +94 76 377 4551
+                  <a href={contact.telHref} className="mt-2 block text-ink underline decoration-brass underline-offset-4 transition-colors hover:text-brass-dark">
+                    {contact.phone}
                   </a>
                 </div>
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-widest text-ink-soft">Email</div>
-                  <a href="mailto:kosala@dharact.com" className="mt-2 block text-ink underline decoration-brass underline-offset-4 transition-colors hover:text-brass-dark">
-                    kosala@dharact.com
+                  <a href={`mailto:${contact.email}`} className="mt-2 block text-ink underline decoration-brass underline-offset-4 transition-colors hover:text-brass-dark">
+                    {contact.email}
                   </a>
                 </div>
               </div>
 
               {/* WhatsApp CTA */}
               <a
-                href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "94763774551"}`}
+                href={`https://wa.me/${contact.whatsapp}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-brass inline-flex gap-2 transition-transform hover:-translate-y-0.5"

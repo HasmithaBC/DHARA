@@ -1,23 +1,15 @@
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import PropertyDetailView from "@/components/PropertyDetailView";
-import { fetchProperty } from "@/lib/api";
+import { propertyMetadata } from "@/lib/property-metadata";
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+// Always rendered live: whatever is saved in the admin shows on the next page load.
+export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const property = await fetchProperty(slug);
-  if (!property) return { title: "Property Not Found" };
-
-  return {
-    title: property.title,
-    description: property.short_description || property.description,
-  };
+  return propertyMetadata(slug);
 }
 
-export default async function PropertyPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const property = await fetchProperty(slug);
-  if (!property) notFound();
-
-  return <PropertyDetailView slug={property.slug} />;
+  return <PropertyDetailView slug={slug} />;
 }

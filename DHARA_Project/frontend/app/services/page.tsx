@@ -1,5 +1,7 @@
+import { getContact } from "@/lib/contact";
 import Link from "next/link";
 import Image from "next/image";
+import SmartMedia from "@/components/SmartMedia";
 import { fetchServices } from "@/lib/api";
 import Reveal from "@/components/motion/Reveal";
 import { StaggerGroup, StaggerItem } from "@/components/motion/StaggerGroup";
@@ -14,6 +16,7 @@ export const metadata = {
 };
 
 export default async function ServicesPage() {
+  const contact = await getContact();
   const services = await fetchServices();
   return (
     <div>
@@ -49,10 +52,9 @@ export default async function ServicesPage() {
             <StaggerItem key={s.id}>
               <Link href={`/services/${s.slug}`} className="card-elevated group block overflow-hidden">
                 <div className="relative aspect-[4/3] overflow-hidden bg-stone-fog">
-                  <Image
+                  <SmartMedia
                     src={s.hero_image}
                     alt={s.title}
-                    fill
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-concrete-900/40 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
@@ -123,7 +125,7 @@ export default async function ServicesPage() {
               Request a Consultation
             </Link>
             <a
-              href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "94763774551"}`}
+              href={`https://wa.me/${contact.whatsapp}`}
               className="btn-brass transition-transform hover:-translate-y-0.5"
             >
               WhatsApp

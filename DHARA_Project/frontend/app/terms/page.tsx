@@ -1,14 +1,24 @@
-export const metadata = { title: "Terms & Conditions" };
+import { fetchPage } from "@/lib/api";
+import RichText from "@/components/RichText";
 
-export default function TermsPage() {
+export async function generateMetadata() {
+  const page = await fetchPage("terms");
+  return { title: page?.meta_title || page?.title || "Terms & Conditions", description: page?.meta_description || undefined };
+}
+
+export default async function Page() {
+  // Edited in Admin → Pages. Falls back to a notice until the copy has been saved once.
+  const page = await fetchPage("terms");
   return (
     <div className="container-content max-w-3xl py-14">
-      <h1 className="font-display text-3xl text-ink">Terms &amp; Conditions</h1>
-      <p className="mt-6 text-sm leading-relaxed text-ink-soft">
-        Placeholder content — final legal copy is to be supplied by Dhara Construction and
-        Technology (Pvt) Ltd per SRS Appendix E / A07 and inserted here via the CMS static
-        pages module (FR-CNT-004).
-      </p>
+      <h1 className="font-display text-3xl text-ink">{page?.title || "Terms & Conditions"}</h1>
+      {page?.body ? (
+        <RichText text={page.body} className="mt-6" />
+      ) : (
+        <p className="mt-6 text-sm leading-relaxed text-ink-soft">
+          Our terms &amp; conditions are being finalised and will be published here shortly.
+        </p>
+      )}
     </div>
   );
 }

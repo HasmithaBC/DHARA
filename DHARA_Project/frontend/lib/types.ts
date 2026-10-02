@@ -70,6 +70,8 @@ export interface PropertyDetail extends PropertySummary {
   has_solar?: boolean | null;
   ac_ready?: boolean | null;
   video_url?: string | null;
+  meta_title?: string | null;
+  meta_description?: string | null;
   view_count: number;
   province_name?: string;
   district_name?: string;

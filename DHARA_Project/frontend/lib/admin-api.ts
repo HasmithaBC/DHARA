@@ -4,7 +4,7 @@
 // localStorage for simplicity in this reference build; a production hand-off
 // may prefer httpOnly cookies issued by a small Next.js route handler instead.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8080/api/v1";
+import { PUBLIC_API_BASE as API_BASE } from "./config";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -58,7 +58,12 @@ export async function adminFetch(path: string, options: RequestInit = {}): Promi
   if (options.body && !isFormData && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
-  let res = await fetch(`${API_BASE}/admin${path}`, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/admin${path}`, { ...options, headers });
+  } catch {
+    throw new Error(`Cannot reach the API at ${API_BASE}. Is the backend running, and is this site's address listed in ALLOWED_ORIGINS?`);
+  }
   if (res.status === 401) {
     const refreshed = await tryRefresh();
     if (refreshed) {
@@ -72,25 +77,75 @@ export async function adminFetch(path: string, options: RequestInit = {}): Promi
   return res;
 }
 
+/** Turns the backend's { error: { message, fields } } into one readable message. */
+export function errorMessage(body: any, fallback: string): string {
+  const msg = body?.error?.message || fallback;
+  const fields = body?.error?.fields;
+  if (fields && typeof fields === "object") {
+    const details = Object.values(fields).filter(Boolean).join(" · ");
+    if (details) return `${msg}: ${details}`;
+  }
+  return msg;
+}
+
+/** Error that keeps the backend's per-field validation messages so forms can highlight them. */
+export class AdminApiError extends Error {
+  fields: Record<string, string>;
+  status: number;
+  constructor(message: string, status = 0, fields: Record<string, string> = {}) {
+    super(message);
+    this.status = status;
+    this.fields = fields;
+  }
+}
+
 export async function adminJSON<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await adminFetch(path, options);
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(body?.error?.message || `Request failed (${res.status})`);
+    throw new AdminApiError(errorMessage(body, `Request failed (${res.status})`), res.status, body?.error?.fields ?? {});
   }
   return (body.data ?? body) as T;
 }
 
-export async function uploadMedia(file: File): Promise<{ url: string; content_type: string; size: number }> {
+/** Public (no-auth) endpoints used inside the admin, e.g. the location tree and amenities. */
+export async function publicJSON<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Could not load ${path} (${res.status})`);
+  const body = await res.json();
+  return (body.data ?? body) as T;
+}
+
+export interface ListMeta {
+  page: number;
+  per_page: number;
+  total: number;
+  total_pages: number;
+}
+
+/** For paginated admin lists: returns both rows and pagination meta. */
+export async function adminList<T>(path: string): Promise<{ data: T[]; meta?: ListMeta }> {
+  const res = await adminFetch(path);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(errorMessage(body, `Request failed (${res.status})`));
+  return { data: (body.data ?? []) as T[], meta: body.meta };
+}
+
+/**
+ * Uploads an image (JPEG/PNG/WebP) or PDF and returns its "/uploads/..." path.
+ * Pass a propertyId when uploading for a property: that route is open to Sales Managers,
+ * while the generic /media-upload (services, projects) is for Content Editors and Administrators.
+ */
+export async function uploadMedia(file: File, propertyId?: string): Promise<{ url: string; content_type: string; size: number }> {
   const formData = new FormData();
   formData.append("file", file);
-  const res = await adminFetch("/media-upload", {
+  const res = await adminFetch(propertyId ? `/properties/${propertyId}/media-upload` : "/media-upload", {
     method: "POST",
     body: formData,
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(body?.error?.message || `Upload failed (${res.status})`);
+    throw new Error(errorMessage(body, `Upload failed (${res.status})`));
   }
   return (body.data ?? body) as { url: string; content_type: string; size: number };
 }

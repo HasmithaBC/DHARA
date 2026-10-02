@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { getContact } from "@/lib/contact";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchProject, fetchProjects } from "@/lib/api";
@@ -12,11 +12,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (!project) return {};
   return {
     title: project.title,
-    description: project.description ?? `${project.title} — a Dhara Construction project in ${project.location}.`,
+    description:
+      project.scope?.slice(0, 160) || `${project.title} — a Dhara Construction project${project.location ? ` in ${project.location}` : ""}.`,
   };
 }
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const contact = await getContact();
   const { slug } = await params;
   const [project, allProjects] = await Promise.all([
     fetchProject(slug),
@@ -40,7 +42,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <div className="absolute inset-0 bg-gradient-to-t from-concrete-900/70 via-concrete-900/30 to-transparent" />
         <div className="container-content absolute inset-0 flex flex-col justify-end pb-10">
           <p className="eyebrow fade-in-up fade-in-up-1 text-brass-light">
-            {project.sector} · {project.location} · {project.year_completed}
+            {[project.sector, project.location, project.year_completed || ""].filter(Boolean).join(" · ")}
           </p>
           <h1 className="fade-in-up fade-in-up-2 mt-2 font-display text-3xl text-stone-paper md:text-4xl">
             {project.title}
@@ -51,21 +53,31 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       {/* Content + sidebar */}
       <div className="container-content grid gap-10 py-14 lg:grid-cols-[1fr_280px]">
         <div>
-          {project.description && (
+          {project.scope && (
             <Reveal>
-              <p className="eyebrow">Project Overview</p>
-              <p className="mt-3 text-sm leading-relaxed text-ink-soft">{project.description}</p>
+              <p className="eyebrow">Scope of Works</p>
+              <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink-soft">{project.scope}</p>
             </Reveal>
           )}
-          {project.scope && (
+          {project.challenge && (
+            <Reveal delay={0.05}>
+              <h2 className="mt-8 font-display text-lg text-ink">The Challenge</h2>
+              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink-soft">{project.challenge}</p>
+            </Reveal>
+          )}
+          {project.solution && (
             <Reveal delay={0.1}>
-              <h2 className="mt-8 font-display text-lg text-ink">Scope of Works</h2>
-              <p className="mt-2 text-sm leading-relaxed text-ink-soft">{project.scope}</p>
+              <h2 className="mt-8 font-display text-lg text-ink">Our Solution</h2>
+              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink-soft">{project.solution}</p>
             </Reveal>
           )}
           {project.body && (
             <Reveal delay={0.15}>
-              <p className="mt-4 text-sm leading-relaxed text-ink-soft">{project.body}</p>
+              <div className="mt-8 space-y-4 text-sm leading-relaxed text-ink-soft">
+                {project.body.split(/\n{2,}/).map((para, i) => (
+                  <p key={i} className="whitespace-pre-line">{para}</p>
+                ))}
+              </div>
             </Reveal>
           )}
 
@@ -103,18 +115,24 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   <dd className="mt-0.5 text-ink">{project.client_name}</dd>
                 </div>
               )}
-              <div>
-                <dt className="text-xs text-ink-soft">Sector</dt>
-                <dd className="mt-0.5 text-ink">{project.sector}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-ink-soft">Location</dt>
-                <dd className="mt-0.5 text-ink">{project.location}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-ink-soft">Year Completed</dt>
-                <dd className="mt-0.5 text-ink">{project.year_completed}</dd>
-              </div>
+              {project.sector && (
+                <div>
+                  <dt className="text-xs text-ink-soft">Sector</dt>
+                  <dd className="mt-0.5 text-ink">{project.sector}</dd>
+                </div>
+              )}
+              {project.location && (
+                <div>
+                  <dt className="text-xs text-ink-soft">Location</dt>
+                  <dd className="mt-0.5 text-ink">{project.location}</dd>
+                </div>
+              )}
+              {!!project.year_completed && (
+                <div>
+                  <dt className="text-xs text-ink-soft">Year Completed</dt>
+                  <dd className="mt-0.5 text-ink">{project.year_completed}</dd>
+                </div>
+              )}
             </dl>
           </aside>
 
@@ -127,7 +145,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               Contact Us
             </Link>
             <a
-              href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "94763774551"}`}
+              href={`https://wa.me/${contact.whatsapp}`}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-2 block text-center text-xs text-stone-line underline underline-offset-4 hover:text-brass-light"
@@ -156,10 +174,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 <StaggerItem key={p.id}>
                   <Link href={`/projects/${p.slug}`} className="group block">
                     <div className="relative aspect-[4/3] overflow-hidden bg-stone-fog">
-                      <Image
+                      <SmartMedia
                         src={p.cover_image}
                         alt={p.title}
-                        fill
                         className="object-cover transition-transform duration-500 group-hover:scale-110"
                       />
                     </div>

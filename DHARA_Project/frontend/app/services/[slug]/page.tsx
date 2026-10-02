@@ -1,4 +1,5 @@
-import Image from "next/image";
+import { getContact } from "@/lib/contact";
+import SmartMedia from "@/components/SmartMedia";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchProjects, fetchService, fetchServices } from "@/lib/api";
@@ -21,6 +22,7 @@ const SERVICE_TO_SECTOR: Record<string, string> = {
 };
 
 export default async function ServiceDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const contact = await getContact();
   const { slug } = await params;
   const [service, allServices] = await Promise.all([
     fetchService(slug),
@@ -34,14 +36,14 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
   const otherServices = allServices.filter((s) => s.slug !== slug);
 
   // Parse body into paragraphs and bullet list
-  const bodyText = service.body ?? service.summary;
+  const bodyText = service.body?.trim() || service.summary || "";
   const sections = bodyText.split("\n\n");
 
   return (
     <div>
       {/* Hero */}
       <div className="relative aspect-[21/8] w-full overflow-hidden bg-stone-fog">
-        <Image src={service.hero_image} alt={service.title} fill className="object-cover" priority />
+        <SmartMedia src={service.hero_image} alt={service.title} className="object-cover" priority />
         <div className="absolute inset-0 bg-concrete-900/50" />
         <div className="container-content absolute inset-0 flex flex-col justify-end pb-10">
           <p className="eyebrow fade-in-up fade-in-up-1 text-brass-light">Services</p>
@@ -121,15 +123,15 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
 
           <aside className="border border-stone-line bg-concrete-900 p-6 text-stone-paper">
             <h3 className="font-display text-base">Contact Us Directly</h3>
-            <p className="mt-2 text-xs text-stone-line">Monday – Saturday, 8:30am – 5:30pm</p>
-            <a href="tel:+94763774551" className="mt-3 block text-sm font-semibold text-brass-light hover:text-brass">
-              +94 76 377 4551
+            <p className="mt-2 text-xs text-stone-line">{contact.hours}</p>
+            <a href={contact.telHref} className="mt-3 block text-sm font-semibold text-brass-light hover:text-brass">
+              {contact.phone}
             </a>
-            <a href="mailto:kosala@dharact.com" className="mt-1 block text-sm text-stone-line hover:text-brass-light">
-              kosala@dharact.com
+            <a href={`mailto:${contact.email}`} className="mt-1 block text-sm text-stone-line hover:text-brass-light">
+              {contact.email}
             </a>
             <a
-              href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "94763774551"}`}
+              href={`https://wa.me/${contact.whatsapp}`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-brass mt-4 inline-flex w-full justify-center"
@@ -152,10 +154,9 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
               items={relatedProjects.map((p) => (
                 <Link key={p.id} href={`/projects/${p.slug}`} className="group flex flex-col h-full">
                   <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-stone-fog">
-                    <Image
+                    <SmartMedia
                       src={p.cover_image}
                       alt={p.title}
-                      fill
                       className="object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                   </div>

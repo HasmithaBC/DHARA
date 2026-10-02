@@ -93,10 +93,10 @@ func (h *AdminHandler) UpdateService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, err := h.DB.Exec(`UPDATE services SET title=$1, summary=$2, body=$3, icon=$4, hero_image=$5,
-		sort_order=$6, is_published=$7, updated_at=now() WHERE id=$8`,
-		in.Title, in.Summary, in.Body, in.Icon, in.HeroImage, in.SortOrder, in.IsPublished, id)
+		sort_order=$6, is_published=$7, slug=COALESCE(NULLIF($9,''), slug), updated_at=now() WHERE id=$8`,
+		in.Title, in.Summary, in.Body, in.Icon, in.HeroImage, in.SortOrder, in.IsPublished, id, util.Slugify(in.Slug))
 	if err != nil {
-		httpx.Error(w, 500, "SERVER_ERROR", "Failed to update service", nil)
+		httpx.Error(w, 400, "VALIDATION_ERROR", "Failed to update service (slug may already exist)", nil)
 		return
 	}
 	h.audit(h.userID(r), "UPDATE", "service", id)
@@ -224,12 +224,13 @@ func (h *AdminHandler) UpdateProject(w http.ResponseWriter, r *http.Request) {
 		galleryJSON = string(in.Gallery)
 	}
 	_, err := h.DB.Exec(`UPDATE projects SET title=$1, client_name=$2, sector=$3, location=$4, year_completed=$5,
-		scope=$6, challenge=$7, solution=$8, body=$9, cover_image=$10, gallery=$11, is_featured=$12, is_published=$13, updated_at=now()
+		scope=$6, challenge=$7, solution=$8, body=$9, cover_image=$10, gallery=$11, is_featured=$12, is_published=$13,
+		slug=COALESCE(NULLIF($15,''), slug), updated_at=now()
 		WHERE id=$14`,
 		in.Title, in.ClientName, in.Sector, in.Location, in.YearCompleted,
-		in.Scope, in.Challenge, in.Solution, in.Body, in.CoverImage, galleryJSON, in.IsFeatured, in.IsPublished, id)
+		in.Scope, in.Challenge, in.Solution, in.Body, in.CoverImage, galleryJSON, in.IsFeatured, in.IsPublished, id, util.Slugify(in.Slug))
 	if err != nil {
-		httpx.Error(w, 500, "SERVER_ERROR", "Failed to update project", nil)
+		httpx.Error(w, 400, "VALIDATION_ERROR", "Failed to update project (slug may already exist)", nil)
 		return
 	}
 	h.audit(h.userID(r), "UPDATE", "project", id)
@@ -255,7 +256,7 @@ func (h *AdminHandler) DeleteProject(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/admin/testimonials — all testimonials including unpublished drafts.
 func (h *AdminHandler) ListTestimonialsAdmin(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.DB.Query(`SELECT id, author_name, author_location, quote, rating, is_published, sort_order FROM testimonials ORDER BY sort_order`)
+	rows, err := h.DB.Query(`SELECT id, author_name, COALESCE(author_location,''), quote, COALESCE(rating,5), is_published, sort_order FROM testimonials ORDER BY sort_order, created_at DESC`)
 	if err != nil {
 		httpx.Error(w, 500, "SERVER_ERROR", "Failed to list testimonials", nil)
 		return
@@ -294,10 +295,20 @@ func (h *AdminHandler) CreateTestimonial(w http.ResponseWriter, r *http.Request)
 		httpx.Error(w, 400, "VALIDATION_ERROR", "Invalid request body", nil)
 		return
 	}
+	if strings.TrimSpace(in.AuthorName) == "" || strings.TrimSpace(in.Quote) == "" {
+		httpx.Error(w, 400, "VALIDATION_ERROR", "Author name and quote are required", nil)
+		return
+	}
+	if in.Rating < 1 || in.Rating > 5 {
+		in.Rating = 5
+	}
 	var id string
-	h.DB.QueryRow(`INSERT INTO testimonials (author_name, author_location, quote, rating, is_published, sort_order)
+	if err := h.DB.QueryRow(`INSERT INTO testimonials (author_name, author_location, quote, rating, is_published, sort_order)
 		VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-		in.AuthorName, in.AuthorLocation, in.Quote, in.Rating, in.IsPublished, in.SortOrder).Scan(&id)
+		in.AuthorName, in.AuthorLocation, in.Quote, in.Rating, in.IsPublished, in.SortOrder).Scan(&id); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to create testimonial", nil)
+		return
+	}
 	h.audit(h.userID(r), "CREATE", "testimonial", id)
 	httpx.JSON(w, 201, map[string]string{"id": id})
 }
@@ -308,6 +319,13 @@ func (h *AdminHandler) UpdateTestimonial(w http.ResponseWriter, r *http.Request)
 	if err := decodeJSON(r, &in); err != nil {
 		httpx.Error(w, 400, "VALIDATION_ERROR", "Invalid request body", nil)
 		return
+	}
+	if strings.TrimSpace(in.AuthorName) == "" || strings.TrimSpace(in.Quote) == "" {
+		httpx.Error(w, 400, "VALIDATION_ERROR", "Author name and quote are required", nil)
+		return
+	}
+	if in.Rating < 1 || in.Rating > 5 {
+		in.Rating = 5
 	}
 	_, err := h.DB.Exec(`UPDATE testimonials SET author_name=$1, author_location=$2, quote=$3, rating=$4,
 		is_published=$5, sort_order=$6 WHERE id=$7`,

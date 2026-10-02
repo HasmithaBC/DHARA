@@ -37,7 +37,13 @@ func (h *PublicHandler) ListProperties(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if v := q.Get("category"); v != "" {
-		add("p.category = $%d", strings.ToUpper(v))
+		category := strings.ToUpper(v)
+		switch category {
+		case "LAND", "HOUSE", "COMMERCIAL":
+			add("p.category = $%d", category)
+		default:
+			where = append(where, "FALSE")
+		}
 	}
 	if v := q.Get("type"); v != "" {
 		add("p.listing_type = $%d", strings.ToUpper(v))
@@ -92,16 +98,16 @@ func (h *PublicHandler) ListProperties(w http.ResponseWriter, r *http.Request) {
 			len(args)-1, len(args), len(args), len(args), len(args)))
 	}
 
-	sortCol := "p.created_at DESC"
+	sortCol := "p.created_at DESC, p.id"
 	switch q.Get("sort") {
 	case "price_asc":
-		sortCol = "p.price_on_request ASC, p.price_lkr ASC"
+		sortCol = "p.price_on_request ASC, p.price_lkr ASC NULLS LAST, p.created_at DESC"
 	case "price_desc":
-		sortCol = "p.price_on_request ASC, p.price_lkr DESC"
+		sortCol = "p.price_on_request ASC, p.price_lkr DESC NULLS LAST, p.created_at DESC"
 	case "extent":
-		sortCol = "p.land_extent_perches DESC NULLS LAST"
+		sortCol = "p.land_extent_perches DESC NULLS LAST, p.created_at DESC"
 	case "built_area":
-		sortCol = "p.built_area_sqft DESC NULLS LAST"
+		sortCol = "p.built_area_sqft DESC NULLS LAST, p.created_at DESC"
 	}
 
 	page, _ := strconv.Atoi(q.Get("page"))
@@ -134,7 +140,7 @@ func (h *PublicHandler) ListProperties(w http.ResponseWriter, r *http.Request) {
 		       p.is_featured, p.short_description, p.price_lkr, p.price_on_request, p.price_unit,
 		       p.land_extent_perches, p.built_area_sqft, p.bedrooms, p.bathrooms,
 		       c.name, d.name,
-		       COALESCE((SELECT url FROM property_images pi WHERE pi.property_id = p.id AND pi.is_cover LIMIT 1), '')
+		       COALESCE((SELECT url FROM property_images pi WHERE pi.property_id = p.id ORDER BY pi.is_cover DESC, pi.sort_order, pi.id LIMIT 1), '')
 		FROM properties p
 		JOIN provinces pr ON pr.id = p.province_id
 		JOIN districts d ON d.id = p.district_id
@@ -217,7 +223,7 @@ func (h *PublicHandler) GetProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	imgRows, err := h.DB.Query(`SELECT id, url, alt_text, sort_order, is_cover FROM property_images WHERE property_id=$1 ORDER BY sort_order`, p.ID)
+	imgRows, err := h.DB.Query(`SELECT id, url, alt_text, sort_order, is_cover FROM property_images WHERE property_id=$1 ORDER BY is_cover DESC, sort_order, id`, p.ID)
 	if err == nil {
 		for imgRows.Next() {
 			var img models.PropertyImage
@@ -252,10 +258,6 @@ func (h *PublicHandler) GetProperty(w http.ResponseWriter, r *http.Request) {
 		amRows.Close()
 	}
 
-	if p.LandExtentPerches != nil {
-		p.MetaDescription = strPtr(util.LandExtentDisplay(*p.LandExtentPerches))
-	}
-
 	httpx.JSON(w, 200, p)
 }
 
@@ -270,26 +272,31 @@ func (h *PublicHandler) IncrementView(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, 200, map[string]bool{"ok": true})
 }
 
-// GET /api/v1/properties/{id}/similar — FR-PRP-010.
+// GET /api/v1/properties/{id}/similar — FR-PRP-010. Same category, same listing type (a rental is never
+// "similar" to a sale), same district, comparable price. Returns the full card fields.
 func (h *PublicHandler) SimilarProperties(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	limit := 4
 	if l := r.URL.Query().Get("limit"); l != "" {
-		if n, err := strconv.Atoi(l); err == nil {
+		if n, err := strconv.Atoi(l); err == nil && n >= 1 && n <= 12 {
 			limit = n
 		}
 	}
 	rows, err := h.DB.Query(`
-		SELECT p2.id, p2.reference_code, p2.title, p2.slug, p2.category, p2.listing_type,
-		       p2.short_description, p2.price_lkr, p2.price_on_request, c.name, d.name,
-		       COALESCE((SELECT url FROM property_images pi WHERE pi.property_id=p2.id AND pi.is_cover LIMIT 1),'')
+		SELECT p2.id, p2.reference_code, p2.title, p2.slug, p2.category, p2.listing_type, p2.status,
+		       p2.is_featured, p2.short_description, p2.price_lkr, p2.price_on_request, p2.price_unit,
+		       p2.land_extent_perches, p2.built_area_sqft, p2.bedrooms, p2.bathrooms,
+		       c.name, d.name,
+		       COALESCE((SELECT url FROM property_images pi WHERE pi.property_id=p2.id ORDER BY pi.is_cover DESC, pi.sort_order, pi.id LIMIT 1),'')
 		FROM properties p1
-		JOIN properties p2 ON p2.category = p1.category AND p2.district_id = p1.district_id AND p2.id <> p1.id
+		JOIN properties p2 ON p2.category = p1.category AND p2.listing_type = p1.listing_type
+		     AND p2.district_id = p1.district_id AND p2.id <> p1.id
 		JOIN cities c ON c.id = p2.city_id
 		JOIN districts d ON d.id = p2.district_id
 		WHERE p1.id = $1 AND p2.status = 'PUBLISHED'
 		  AND (p1.price_lkr IS NULL OR p2.price_lkr IS NULL OR
 		       p2.price_lkr BETWEEN p1.price_lkr * 0.7 AND p1.price_lkr * 1.3)
+		ORDER BY p2.is_featured DESC, p2.created_at DESC
 		LIMIT $2`, id, limit)
 	if err != nil {
 		httpx.Error(w, 500, "SERVER_ERROR", "Failed to load similar properties", nil)
@@ -299,8 +306,12 @@ func (h *PublicHandler) SimilarProperties(w http.ResponseWriter, r *http.Request
 	results := []models.Property{}
 	for rows.Next() {
 		var p models.Property
-		rows.Scan(&p.ID, &p.ReferenceCode, &p.Title, &p.Slug, &p.Category, &p.ListingType,
-			&p.ShortDescription, &p.PriceLKR, &p.PriceOnRequest, &p.City, &p.District, &p.CoverURL)
+		if err := rows.Scan(&p.ID, &p.ReferenceCode, &p.Title, &p.Slug, &p.Category, &p.ListingType, &p.Status,
+			&p.IsFeatured, &p.ShortDescription, &p.PriceLKR, &p.PriceOnRequest, &p.PriceUnit,
+			&p.LandExtentPerches, &p.BuiltAreaSqft, &p.Bedrooms, &p.Bathrooms,
+			&p.City, &p.District, &p.CoverURL); err != nil {
+			continue
+		}
 		results = append(results, p)
 	}
 	if err := rows.Err(); err != nil {
@@ -382,7 +393,7 @@ func (h *PublicHandler) Amenities(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PublicHandler) ListServices(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.DB.Query(`SELECT id, slug, title, summary, icon, hero_image, sort_order FROM services WHERE is_published ORDER BY sort_order`)
+	rows, err := h.DB.Query(`SELECT id, slug, title, COALESCE(summary,''), COALESCE(icon,''), COALESCE(hero_image,''), sort_order FROM services WHERE is_published ORDER BY sort_order, title`)
 	if err != nil {
 		httpx.Error(w, 500, "SERVER_ERROR", "Failed to load services", nil)
 		return
@@ -391,7 +402,9 @@ func (h *PublicHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 	out := []models.Service{}
 	for rows.Next() {
 		var s models.Service
-		rows.Scan(&s.ID, &s.Slug, &s.Title, &s.Summary, &s.Icon, &s.HeroImage, &s.SortOrder)
+		if err := rows.Scan(&s.ID, &s.Slug, &s.Title, &s.Summary, &s.Icon, &s.HeroImage, &s.SortOrder); err != nil {
+			continue
+		}
 		out = append(out, s)
 	}
 	if err := rows.Err(); err != nil {
@@ -423,8 +436,8 @@ func (h *PublicHandler) ListProjects(w http.ResponseWriter, r *http.Request) {
 		args = append(args, v)
 		where = append(where, fmt.Sprintf("sector = $%d", len(args)))
 	}
-	rows, err := h.DB.Query(fmt.Sprintf(`SELECT id, slug, title, sector, location, year_completed, cover_image, is_featured
-		FROM projects WHERE %s ORDER BY year_completed DESC`, strings.Join(where, " AND ")), args...)
+	rows, err := h.DB.Query(fmt.Sprintf(`SELECT id, slug, title, COALESCE(sector,''), COALESCE(location,''), COALESCE(year_completed,0), COALESCE(cover_image,''), is_featured
+		FROM projects WHERE %s ORDER BY year_completed DESC NULLS LAST, title`, strings.Join(where, " AND ")), args...)
 	if err != nil {
 		httpx.Error(w, 500, "SERVER_ERROR", "Failed to load projects", nil)
 		return
@@ -433,7 +446,9 @@ func (h *PublicHandler) ListProjects(w http.ResponseWriter, r *http.Request) {
 	out := []models.Project{}
 	for rows.Next() {
 		var p models.Project
-		rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Sector, &p.Location, &p.YearCompleted, &p.CoverImage, &p.IsFeatured)
+		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Sector, &p.Location, &p.YearCompleted, &p.CoverImage, &p.IsFeatured); err != nil {
+			continue
+		}
 		out = append(out, p)
 	}
 	if err := rows.Err(); err != nil {
@@ -447,7 +462,7 @@ func (h *PublicHandler) GetProject(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	var p models.Project
 	var galleryRaw []byte
-	err := h.DB.QueryRow(`SELECT id, slug, title, COALESCE(client_name,''), sector, location, year_completed, COALESCE(scope,''), COALESCE(challenge,''), COALESCE(solution,''), COALESCE(body,''), COALESCE(cover_image,''), gallery, is_featured, is_published
+	err := h.DB.QueryRow(`SELECT id, slug, title, COALESCE(client_name,''), COALESCE(sector,''), COALESCE(location,''), COALESCE(year_completed,0), COALESCE(scope,''), COALESCE(challenge,''), COALESCE(solution,''), COALESCE(body,''), COALESCE(cover_image,''), gallery, is_featured, is_published
 		FROM projects WHERE slug=$1 AND is_published`, slug).
 		Scan(&p.ID, &p.Slug, &p.Title, &p.ClientName, &p.Sector, &p.Location, &p.YearCompleted, &p.Scope, &p.Challenge, &p.Solution, &p.Body, &p.CoverImage, &galleryRaw, &p.IsFeatured, &p.IsPublished)
 	if err == sql.ErrNoRows {
@@ -466,7 +481,7 @@ func (h *PublicHandler) GetProject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PublicHandler) Testimonials(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.DB.Query(`SELECT id, author_name, author_location, quote, rating FROM testimonials WHERE is_published ORDER BY sort_order`)
+	rows, err := h.DB.Query(`SELECT id, author_name, COALESCE(author_location,''), quote, COALESCE(rating,5) FROM testimonials WHERE is_published ORDER BY sort_order, created_at DESC`)
 	if err != nil {
 		httpx.Error(w, 500, "SERVER_ERROR", "Failed to load testimonials", nil)
 		return
@@ -475,7 +490,9 @@ func (h *PublicHandler) Testimonials(w http.ResponseWriter, r *http.Request) {
 	out := []models.Testimonial{}
 	for rows.Next() {
 		var t models.Testimonial
-		rows.Scan(&t.ID, &t.AuthorName, &t.AuthorLocation, &t.Quote, &t.Rating)
+		if err := rows.Scan(&t.ID, &t.AuthorName, &t.AuthorLocation, &t.Quote, &t.Rating); err != nil {
+			continue
+		}
 		out = append(out, t)
 	}
 	if err := rows.Err(); err != nil {
@@ -695,10 +712,16 @@ func (h *PublicHandler) DownloadDocument(w http.ResponseWriter, r *http.Request)
 // POST /api/v1/newsletter/subscribe — FR-INQ-010: double opt-in.
 func (h *PublicHandler) NewsletterSubscribe(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Email string `json:"email"`
+		Email   string `json:"email"`
+		Website string `json:"website"` // honeypot, sent by the frontend form
 	}
 	if err := decodeJSON(r, &req); err != nil || !strings.Contains(req.Email, "@") {
 		httpx.Error(w, 400, "VALIDATION_ERROR", "A valid email is required", nil)
+		return
+	}
+	if req.Website != "" {
+		// Bot filled the honeypot: pretend success, store nothing.
+		httpx.JSON(w, 201, map[string]string{"status": "confirmation_sent"})
 		return
 	}
 	token := randomToken()

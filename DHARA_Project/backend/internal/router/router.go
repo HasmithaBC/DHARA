@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/dharact/backend/internal/config"
@@ -18,6 +19,17 @@ const (
 	roleAdmin = "ADMINISTRATOR"
 )
 
+// noDirListing stops the static file server from listing the uploads directory.
+func noDirListing(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func New(db *sql.DB, cfg *config.Config) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Logging)
@@ -26,14 +38,14 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 
 	// Serves files written by AdminHandler.UploadMedia.
 	os.MkdirAll(cfg.MediaUploadDir, 0o750)
-	r.Handle("/uploads/*", http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.MediaUploadDir))))
+	r.Handle("/uploads/*", noDirListing(http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.MediaUploadDir)))))
 
 	pub := handlers.NewPublicHandler(db, cfg)
 	auth := handlers.NewAuthHandler(db, cfg)
 	adm := handlers.NewAdminHandler(db, cfg)
 
 	leadLimiter := middleware.NewIPRateLimiter(5, 10*time.Minute)
-	readLimiter := middleware.NewIPRateLimiter(120, time.Minute)
+	readLimiter := middleware.NewIPRateLimiter(1200, time.Minute)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// ---------- Public, read-only (§6.1) ----------
@@ -88,11 +100,12 @@ func New(db *sql.DB, cfg *config.Config) http.Handler {
 				r.Post("/properties", adm.CreateProperty)
 				r.Get("/properties/{id}", adm.GetPropertyAdmin)
 				r.Patch("/properties/{id}", adm.UpdateProperty)
-				r.Delete("/properties/{id}", adm.ArchiveProperty)
+				r.Delete("/properties/{id}", adm.DeleteProperty)
 				r.Post("/properties/{id}/status", adm.TransitionStatus)
 				r.Post("/properties/{id}/duplicate", adm.DuplicateProperty)
 				r.Post("/properties/bulk", adm.BulkActionV2)
 				r.Get("/property-options", adm.PropertyOptions)
+				r.Post("/cities", adm.CreateCity)
 				r.Post("/properties/{id}/images", adm.AddImageV2)
 				r.Post("/properties/{id}/media-upload", adm.UploadMedia)
 				r.Delete("/properties/{id}/images/{imageId}", adm.DeleteImage)

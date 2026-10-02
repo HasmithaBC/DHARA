@@ -7,7 +7,7 @@ import MobileFilterSheet from "@/components/MobileFilterSheet";
 
 export interface CatalogueProps {
   title: string;
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Record<string, string | string[] | undefined> | Promise<Record<string, string | string[] | undefined>>;
   forced?: Record<string, string>;
   showFeatured?: boolean;
 }
@@ -27,7 +27,9 @@ function toQuery(sp: Record<string, string | string[] | undefined>, forced?: Rec
 }
 
 export default async function PropertyCatalogue({ title, searchParams, forced, showFeatured = false }: CatalogueProps) {
-  const params = toQuery(searchParams, forced);
+  // Next.js 15+/16 hands pages `searchParams` as a Promise — always resolve it first.
+  const resolvedSearchParams = await searchParams;
+  const params = toQuery(resolvedSearchParams ?? {}, forced);
   const page = Number(params.page || "1");
   const [result, featured] = await Promise.all([
     fetchProperties({ ...params, page: String(page), per_page: "12" }),
@@ -59,7 +61,7 @@ export default async function PropertyCatalogue({ title, searchParams, forced, s
   const filterForm = (
     <aside className="h-fit border border-stone-line bg-stone-paper p-5 lg:sticky lg:top-24">
       <form method="get" className="space-y-4 text-sm">
-        {!forced?.listing_type && (
+        {!forced?.type && (
           <div>
             <label className="mb-1 block text-xs font-medium text-ink-soft">Listing Type</label>
             <select name="type" defaultValue={params.type || ""} className="w-full border border-stone-line px-2 py-2">

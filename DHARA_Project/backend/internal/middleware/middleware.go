@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -63,17 +64,26 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 }
 
 // CORS applies a permissive-but-scoped CORS policy for the public frontend origin.
-func CORS(allowedOrigin string) func(http.Handler) http.Handler {
+// allowedOrigins is a comma-separated list (ALLOWED_ORIGINS); the request Origin is echoed
+// back only when it matches one of them.
+func CORS(allowedOrigins string) func(http.Handler) http.Handler {
+	allowed := map[string]bool{}
+	for _, o := range strings.Split(allowedOrigins, ",") {
+		o = strings.TrimRight(strings.TrimSpace(o), "/")
+		if o != "" {
+			allowed[o] = true
+		}
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
-			if origin == "http://localhost:3000" || origin == "http://127.0.0.1:3000" || origin == allowedOrigin {
+			w.Header().Add("Vary", "Origin")
+			if origin != "" && allowed[origin] {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
-			} else {
-				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 			}
 			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization")
+			w.Header().Set("Access-Control-Max-Age", "600")
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
 				return
@@ -145,6 +155,9 @@ func (l *IPRateLimiter) Middleware(next http.Handler) http.Handler {
 func clientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		return strings.TrimSpace(strings.Split(xff, ",")[0])
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
 	}
 	return r.RemoteAddr
 }
