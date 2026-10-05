@@ -588,6 +588,7 @@ export default function ProjectsAdminPage() {
                   required
                   onChange={(url) => setForm({ ...form, cover_image: url })}
                   helpText="Hero cover image displayed on project cards and detail page banner."
+                  folder="projects"
                 />
                 {formErrors.cover_image && <p className="text-xs text-red-600 mt-1">{formErrors.cover_image}</p>}
               </div>
@@ -598,6 +599,7 @@ export default function ProjectsAdminPage() {
                   label="Project Gallery Photos"
                   images={form.gallery}
                   onChange={(imgs) => setForm({ ...form, gallery: imgs })}
+                  folder="projects"
                 />
               </div>
 

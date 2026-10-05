@@ -143,6 +143,8 @@ type Lead struct {
 	ID                       string     `json:"id"`
 	LeadType                 string     `json:"lead_type"`
 	PropertyID               *string    `json:"property_id,omitempty"`
+	PropertyTitle            *string    `json:"property_title,omitempty"`
+	PropertyRef              *string    `json:"property_ref,omitempty"`
 	Name                     string     `json:"name"`
 	Email                    string     `json:"email"`
 	Phone                    string     `json:"phone"`

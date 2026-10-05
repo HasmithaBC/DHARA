@@ -673,16 +673,12 @@ func (h *PublicHandler) RequestDocument(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	token, expiresAt := util.SignDownloadURL(h.Cfg.SignedURLSecret, docID, 15*time.Minute)
-	signedURL := fmt.Sprintf("%s/api/v1/documents/%s/download?token=%s", h.Cfg.SiteBaseURL, docID, token)
-
 	h.DB.Exec(`
 		INSERT INTO leads (lead_type, property_id, name, email, phone, message, consent_given_at)
 		VALUES ('DOCUMENT_DOWNLOAD',$1,$2,$3,$4,$5, now())`,
-		propertyID, req.Name, req.Email, phone, "Requested document: "+title)
-	h.DB.Exec(`UPDATE property_documents SET download_count = download_count + 1 WHERE id=$1`, docID)
+		propertyID, req.Name, req.Email, phone, "Requested access to document: "+title)
 
-	httpx.JSON(w, 200, map[string]interface{}{"download_url": signedURL, "expires_at": expiresAt})
+	httpx.JSON(w, 200, map[string]interface{}{"status": "success", "message": "Request sent successfully"})
 }
 
 // GET /api/v1/documents/{id}/download — FR-PRP-007: PUBLIC documents download directly with

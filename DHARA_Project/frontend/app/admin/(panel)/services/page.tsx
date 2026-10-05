@@ -448,6 +448,7 @@ export default function ServicesAdminPage() {
                 value={form.hero_image}
                 onChange={(url) => setForm({ ...form, hero_image: url })}
                 helpText="Upload a high quality hero image for the service header."
+                folder="services"
               />
 
               {/* Sort Order & Publication Status */}

@@ -12,6 +12,7 @@ interface SingleImageUploaderProps {
   required?: boolean;
   helpText?: string;
   className?: string;
+  folder?: string;
 }
 
 export function SingleImageUploader({
@@ -21,6 +22,7 @@ export function SingleImageUploader({
   required = false,
   helpText,
   className = "",
+  folder,
 }: SingleImageUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
@@ -47,7 +49,7 @@ export function SingleImageUploader({
     setIsUploading(true);
 
     try {
-      const res = await uploadMedia(file);
+      const res = await uploadMedia(file, undefined, folder);
       onChange(res.url);
       toast.success("Image uploaded successfully.");
     } catch (err: any) {
@@ -157,6 +159,7 @@ interface MultiGalleryUploaderProps {
   images: string[];
   onChange: (images: string[]) => void;
   className?: string;
+  folder?: string;
 }
 
 export function MultiGalleryUploader({
@@ -164,6 +167,7 @@ export function MultiGalleryUploader({
   images = [],
   onChange,
   className = "",
+  folder,
 }: MultiGalleryUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
@@ -193,7 +197,7 @@ export function MultiGalleryUploader({
       }
 
       try {
-        const res = await uploadMedia(file);
+        const res = await uploadMedia(file, undefined, folder);
         newUrls.push(res.url);
       } catch (err: any) {
         errors.push(`${file.name}: ${err.message || "Upload failed."}`);

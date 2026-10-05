@@ -47,7 +47,14 @@ export default function LeadDetailPage() {
           <dl className="space-y-2">
             <div><dt className="text-xs text-ink-soft">Email</dt><dd>{lead.email}</dd></div>
             <div><dt className="text-xs text-ink-soft">Phone</dt><dd>{lead.phone}</dd></div>
-            {lead.property_id && <div><dt className="text-xs text-ink-soft">Property ID</dt><dd className="text-xs">{lead.property_id}</dd></div>}
+            {lead.property_id && (
+              <div>
+                <dt className="text-xs text-ink-soft">Property</dt>
+                <dd>
+                  {lead.property_title || "Unknown Property"} <span className="text-xs text-ink-soft">({lead.property_ref || lead.property_id})</span>
+                </dd>
+              </div>
+            )}
             {lead.message && <div><dt className="text-xs text-ink-soft">Message</dt><dd>{lead.message}</dd></div>}
             {lead.source_url && <div><dt className="text-xs text-ink-soft">Source URL</dt><dd className="break-all text-xs">{lead.source_url}</dd></div>}
             {(lead.utm_source || lead.utm_medium || lead.utm_campaign) && (

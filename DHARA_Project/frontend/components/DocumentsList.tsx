@@ -20,8 +20,7 @@ function GatedRow({ doc }: { doc: PropertyDocument }) {
       phone: String(form.get("phone") || ""),
       email: String(form.get("email") || ""),
     });
-    if (res.ok && res.downloadUrl) {
-      setUrl(res.downloadUrl);
+    if (res.ok) {
       setStatus("ready");
     } else {
       setStatus("error");
@@ -52,20 +51,16 @@ function GatedRow({ doc }: { doc: PropertyDocument }) {
           <input name="email" required type="email" placeholder="Email" className="border border-stone-line px-2 py-1.5 text-xs" />
           <div className="sm:col-span-3 flex items-center gap-3">
             <button type="submit" disabled={status === "sending"} className="btn-primary px-3 py-1.5 text-xs">
-              {status === "sending" ? "Requesting…" : "Get Download Link"}
+              {status === "sending" ? "Requesting…" : "Request Access"}
             </button>
             {status === "error" && <span className="text-xs text-red-700">{error}</span>}
           </div>
         </form>
       )}
 
-      {status === "ready" && url && (
-        <p className="mt-3 text-xs text-ink">
-          Access granted —{" "}
-          <a href={url} target="_blank" rel="noopener noreferrer" className="underline">
-            download {doc.title} now
-          </a>{" "}
-          (link expires in 15 minutes).
+      {status === "ready" && (
+        <p className="mt-3 text-xs text-emerald-700">
+          Request sent successfully. You will be contacted via email or phone shortly.
         </p>
       )}
     </li>

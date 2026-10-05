@@ -201,11 +201,11 @@ h.loadExtended(&p)
 		imgRows.Close()
 	}
 
-	docRows, err := h.DB.Query(`SELECT id, type, title, access, is_watermarked, download_count FROM property_documents WHERE property_id=$1`, p.ID)
+	docRows, err := h.DB.Query(`SELECT id, type, title, file_url, access, is_watermarked, download_count FROM property_documents WHERE property_id=$1`, p.ID)
 	if err == nil {
 		for docRows.Next() {
 			var d models.PropertyDocument
-			docRows.Scan(&d.ID, &d.Type, &d.Title, &d.Access, &d.IsWatermarked, &d.DownloadCount)
+			docRows.Scan(&d.ID, &d.Type, &d.Title, &d.FileURL, &d.Access, &d.IsWatermarked, &d.DownloadCount)
 			p.Docs = append(p.Docs, d)
 		}
 		_ = docRows.Err()
@@ -562,16 +562,29 @@ func (h *AdminHandler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := os.MkdirAll(h.Cfg.MediaUploadDir, 0o750); err != nil {
+	folder := r.FormValue("folder")
+	var subFolder string
+	if propertyID != "" {
+		subFolder = filepath.Join("properties", propertyID)
+	} else if folder != "" {
+		cleanFolder := filepath.Clean(folder)
+		if !strings.HasPrefix(cleanFolder, "..") && !strings.HasPrefix(cleanFolder, "/") && !strings.HasPrefix(cleanFolder, "\\") {
+			subFolder = cleanFolder
+		}
+	}
+
+	destDir := filepath.Join(h.Cfg.MediaUploadDir, subFolder)
+	if err := os.MkdirAll(destDir, 0o750); err != nil {
 		httpx.Error(w, 500, "SERVER_ERROR", "Failed to prepare upload storage", nil)
 		return
 	}
+
 	prefix := propertyID
 	if prefix == "" {
 		prefix = "media"
 	}
 	safeName := fmt.Sprintf("%s-%d%s", prefix, time.Now().UnixNano(), ext)
-	destPath := filepath.Join(h.Cfg.MediaUploadDir, safeName)
+	destPath := filepath.Join(destDir, safeName)
 
 	dest, err := os.Create(destPath)
 	if err != nil {
@@ -589,7 +602,13 @@ func (h *AdminHandler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mediaURL := fmt.Sprintf("/uploads/%s", safeName)
+	var mediaURL string
+	if subFolder != "" {
+		urlFolder := strings.ReplaceAll(subFolder, "\\", "/")
+		mediaURL = fmt.Sprintf("/uploads/%s/%s", urlFolder, safeName)
+	} else {
+		mediaURL = fmt.Sprintf("/uploads/%s", safeName)
+	}
 	httpx.JSON(w, 201, map[string]interface{}{"url": mediaURL, "content_type": contentType, "size": header.Size})
 }
 
@@ -735,9 +754,11 @@ func (h *AdminHandler) ListLeads(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) GetLead(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var l models.Lead
-	err := h.DB.QueryRow(`SELECT id, lead_type, property_id, name, email, phone, message, status,
-		assigned_to, internal_notes, source_url, utm_source, utm_medium, utm_campaign, created_at
-		FROM leads WHERE id=$1`, id).Scan(&l.ID, &l.LeadType, &l.PropertyID, &l.Name, &l.Email, &l.Phone,
+	err := h.DB.QueryRow(`SELECT l.id, l.lead_type, l.property_id, p.title, p.reference_code, l.name, l.email, l.phone, l.message, l.status,
+		l.assigned_to, l.internal_notes, l.source_url, l.utm_source, l.utm_medium, l.utm_campaign, l.created_at
+		FROM leads l
+		LEFT JOIN properties p ON l.property_id = p.id
+		WHERE l.id=$1`, id).Scan(&l.ID, &l.LeadType, &l.PropertyID, &l.PropertyTitle, &l.PropertyRef, &l.Name, &l.Email, &l.Phone,
 		&l.Message, &l.Status, &l.AssignedTo, &l.InternalNotes, &l.SourceURL, &l.UTMSource, &l.UTMMedium, &l.UTMCampaign, &l.CreatedAt)
 	if err == sql.ErrNoRows {
 		httpx.Error(w, 404, "NOT_FOUND", "Lead not found", nil)

@@ -1,5 +1,6 @@
 import PropertyCard from "@/components/PropertyCard";
 import { PropertySummary } from "@/lib/types";
+import Carousel from "@/components/Carousel";
 
 interface FeaturedPropertyCatalogProps {
   properties: PropertySummary[];
@@ -24,10 +25,16 @@ export default function FeaturedPropertyCatalog({
             <p className="mt-2 max-w-xl text-sm text-ink-soft">{description}</p>
           </div>
         </div>
-        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {properties.slice(0, 4).map((property) => (
-            <PropertyCard key={property.id} property={property} />
-          ))}
+        <div className="mt-8">
+          <Carousel
+            items={properties.map((property) => (
+              <PropertyCard key={property.id} property={property} />
+            ))}
+            itemsPerView={4}
+            gridClassName="sm:grid-cols-2 lg:grid-cols-4"
+            viewAllLink="/properties"
+            viewAllText="View All Properties"
+          />
         </div>
       </div>
     </section>

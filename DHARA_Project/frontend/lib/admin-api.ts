@@ -136,9 +136,12 @@ export async function adminList<T>(path: string): Promise<{ data: T[]; meta?: Li
  * Pass a propertyId when uploading for a property: that route is open to Sales Managers,
  * while the generic /media-upload (services, projects) is for Content Editors and Administrators.
  */
-export async function uploadMedia(file: File, propertyId?: string): Promise<{ url: string; content_type: string; size: number }> {
+export async function uploadMedia(file: File, propertyId?: string, folder?: string): Promise<{ url: string; content_type: string; size: number }> {
   const formData = new FormData();
   formData.append("file", file);
+  if (folder) {
+    formData.append("folder", folder);
+  }
   const res = await adminFetch(propertyId ? `/properties/${propertyId}/media-upload` : "/media-upload", {
     method: "POST",
     body: formData,

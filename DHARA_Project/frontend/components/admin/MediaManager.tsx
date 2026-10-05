@@ -54,8 +54,9 @@ export default function MediaManager({
   const [dragOver, setDragOver] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [alts, setAlts] = useState<Record<string, string>>({});
-  const [doc, setDoc] = useState({ type: "BROCHURE", title: "", access: "PUBLIC" });
+  const [doc, setDoc] = useState({ type: "BROCHURE", title: "", access: "PUBLIC", docUrl: "" });
   const [docFile, setDocFile] = useState<File | null>(null);
+  const docFileInput = useRef<HTMLInputElement>(null);
   const [docBusy, setDocBusy] = useState(false);
 
   const sorted = [...images].sort((a, b) => a.sort_order - b.sort_order);
@@ -157,8 +158,8 @@ export default function MediaManager({
   }
 
   async function addDocument() {
-    if (!docFile) {
-      toast.error("Choose a PDF file first");
+    if (!docFile && !doc.docUrl.trim()) {
+      toast.error("Choose a file or enter a link first");
       return;
     }
     if (!doc.title.trim()) {
@@ -167,13 +168,18 @@ export default function MediaManager({
     }
     setDocBusy(true);
     try {
-      const up = await uploadMedia(docFile, propertyId);
+      let finalUrl = doc.docUrl.trim();
+      if (docFile) {
+        const up = await uploadMedia(docFile, propertyId);
+        finalUrl = up.url;
+      }
       await adminJSON(`/properties/${propertyId}/documents`, {
         method: "POST",
-        body: JSON.stringify({ type: doc.type, title: doc.title.trim(), file_url: up.url, access: doc.access, is_watermarked: false }),
+        body: JSON.stringify({ type: doc.type, title: doc.title.trim(), file_url: finalUrl, access: doc.access, is_watermarked: false }),
       });
-      setDoc({ type: "BROCHURE", title: "", access: "PUBLIC" });
+      setDoc({ type: "BROCHURE", title: "", access: "PUBLIC", docUrl: "" });
       setDocFile(null);
+      if (docFileInput.current) docFileInput.current.value = "";
       toast.success("Document added");
       onChange();
     } catch (e: any) {
@@ -265,10 +271,21 @@ export default function MediaManager({
         <p className="mt-1 text-xs text-ink-soft">Brochures, survey plans, floor plans (PDF).</p>
         <ul className="mt-3 divide-y divide-stone-line border border-stone-line bg-white">
           {documents.map((d) => (
-            <li key={d.id} className="flex items-center justify-between gap-3 p-2 text-xs">
-              <div className="min-w-0">
-                <div className="truncate font-medium text-ink">{d.title}</div>
-                <div className="text-ink-soft">{DOC_TYPES.find(([v]) => v === d.type)?.[1] ?? d.type} · {d.access.toLowerCase()}</div>
+            <li key={d.id} className="flex items-start justify-between gap-3 p-2 text-xs">
+              <div className="min-w-0 flex-1">
+                <details className="group">
+                  <summary className="cursor-pointer truncate font-medium text-ink hover:underline">{d.title}</summary>
+                  <div className="mt-2 mb-1">
+                    {d.file_url ? (
+                      <a href={d.file_url.startsWith('http') ? d.file_url : mediaUrl(d.file_url)} target="_blank" rel="noreferrer" className="text-brass underline">
+                        View / Download
+                      </a>
+                    ) : (
+                      <span className="text-ink-soft">No link saved</span>
+                    )}
+                  </div>
+                </details>
+                <div className="mt-1 text-ink-soft">{DOC_TYPES.find(([v]) => v === d.type)?.[1] ?? d.type} · {d.access.toLowerCase()}</div>
               </div>
               <button type="button" onClick={() => removeDoc(d)} className="shrink-0 text-red-700 underline">Remove</button>
             </li>
@@ -286,7 +303,26 @@ export default function MediaManager({
               {DOC_ACCESS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </div>
-          <input type="file" accept="application/pdf" onChange={(e) => setDocFile(e.target.files?.[0] ?? null)} className="w-full text-xs" />
+          <div className="flex flex-col gap-2 border border-stone-line bg-white p-3 text-xs">
+            <span className="font-medium text-ink">File or Link</span>
+            <div className="flex items-center gap-2">
+              <input ref={docFileInput} type="file" accept="application/pdf" onChange={(e) => {
+                setDocFile(e.target.files?.[0] ?? null);
+              }} disabled={!!doc.docUrl} className="w-full text-xs disabled:opacity-50 disabled:cursor-not-allowed" />
+              {docFile && (
+                <button type="button" onClick={() => {
+                  setDocFile(null);
+                  if (docFileInput.current) docFileInput.current.value = "";
+                }} className="text-red-700 underline shrink-0">
+                  Remove
+                </button>
+              )}
+            </div>
+            <div className="text-center text-ink-soft my-1">OR</div>
+            <input value={doc.docUrl} onChange={(e) => {
+              setDoc({ ...doc, docUrl: e.target.value });
+            }} disabled={!!docFile} placeholder="External link (e.g., Google Drive)" className="w-full border border-stone-line px-2 py-1.5 disabled:bg-stone-100 disabled:text-stone-400 disabled:cursor-not-allowed" />
+          </div>
           <button type="button" onClick={addDocument} disabled={docBusy} className="btn-outline w-full justify-center disabled:opacity-60">
             {docBusy ? "Uploading…" : "Upload document"}
           </button>
