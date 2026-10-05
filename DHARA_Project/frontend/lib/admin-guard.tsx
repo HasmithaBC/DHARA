@@ -19,6 +19,7 @@ export const ADMIN_NAV: { href: string; label: string; roles: AdminRole[] }[] = 
   { href: "/admin/services", label: "Services", roles: ["CONTENT_EDITOR", "ADMINISTRATOR"] },
   { href: "/admin/projects", label: "Projects", roles: ["CONTENT_EDITOR", "ADMINISTRATOR"] },
   { href: "/admin/testimonials", label: "Testimonials", roles: ["CONTENT_EDITOR", "ADMINISTRATOR"] },
+  { href: "/admin/pages", label: "Pages", roles: ["CONTENT_EDITOR", "ADMINISTRATOR"] },
   { href: "/admin/settings", label: "Settings", roles: ["ADMINISTRATOR"] },
   { href: "/admin/users", label: "Users", roles: ["ADMINISTRATOR"] },
   { href: "/admin/audit-log", label: "Audit Log", roles: ["ADMINISTRATOR"] },

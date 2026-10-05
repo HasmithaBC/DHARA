@@ -232,7 +232,8 @@ func (h *AdminHandler) ListAllPropertiesV2(w http.ResponseWriter, r *http.Reques
 
 	rows, err := h.DB.Query(fmt.Sprintf(`
 		SELECT p.id, p.reference_code, p.title, p.slug, p.category, p.listing_type, p.status,
-		       p.is_featured, p.price_lkr, p.price_on_request, p.view_count, p.updated_at
+		       p.is_featured, p.price_lkr, p.price_on_request, p.view_count, p.updated_at,
+		       COALESCE((SELECT pi.url FROM property_images pi WHERE pi.property_id = p.id AND pi.is_cover LIMIT 1), '')
 		FROM properties p WHERE %s ORDER BY p.updated_at DESC LIMIT %d OFFSET %d`,
 		strings.Join(where, " AND "), perPage, (page-1)*perPage), args...)
 	if err != nil {
@@ -244,7 +245,7 @@ func (h *AdminHandler) ListAllPropertiesV2(w http.ResponseWriter, r *http.Reques
 	for rows.Next() {
 		var p models.Property
 		rows.Scan(&p.ID, &p.ReferenceCode, &p.Title, &p.Slug, &p.Category, &p.ListingType, &p.Status,
-			&p.IsFeatured, &p.PriceLKR, &p.PriceOnRequest, &p.ViewCount, &p.UpdatedAt)
+			&p.IsFeatured, &p.PriceLKR, &p.PriceOnRequest, &p.ViewCount, &p.UpdatedAt, &p.CoverURL)
 		out = append(out, p)
 	}
 	if err := rows.Err(); err != nil {
@@ -515,6 +516,7 @@ func (h *AdminHandler) BulkActionV2(w http.ResponseWriter, r *http.Request) {
 			h.DB.Exec(`UPDATE properties SET is_featured=false, updated_at=now() WHERE id=$1`, id)
 		case "publish":
 			if reason = h.publishBlocker(id); reason == "" {
+				h.ensureCover(id)
 				h.DB.Exec(`UPDATE properties SET status='PUBLISHED', published_at=COALESCE(published_at, now()), updated_at=now() WHERE id=$1`, id)
 			}
 		case "unpublish", "archive":
@@ -1281,7 +1283,7 @@ func (h *PublicHandler) GetPage(w http.ResponseWriter, r *http.Request) {
 
 // GET /admin/services
 func (h *AdminHandler) ListServicesAdminV2(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.DB.Query(`SELECT id, slug, title, COALESCE(summary,''), COALESCE(icon,''), COALESCE(hero_image,''), sort_order, is_published
+	rows, err := h.DB.Query(`SELECT id, slug, title, COALESCE(summary,''), COALESCE(body,''), COALESCE(icon,''), COALESCE(hero_image,''), sort_order, is_published
 		FROM services ORDER BY sort_order, title`)
 	if err != nil {
 		httpx.Error(w, 500, "SERVER_ERROR", "Failed to list services", nil)
@@ -1293,6 +1295,7 @@ func (h *AdminHandler) ListServicesAdminV2(w http.ResponseWriter, r *http.Reques
 		Slug        string `json:"slug"`
 		Title       string `json:"title"`
 		Summary     string `json:"summary"`
+		Body        string `json:"body"`
 		Icon        string `json:"icon"`
 		HeroImage   string `json:"hero_image"`
 		SortOrder   int    `json:"sort_order"`
@@ -1301,7 +1304,7 @@ func (h *AdminHandler) ListServicesAdminV2(w http.ResponseWriter, r *http.Reques
 	out := []row{}
 	for rows.Next() {
 		var s row
-		rows.Scan(&s.ID, &s.Slug, &s.Title, &s.Summary, &s.Icon, &s.HeroImage, &s.SortOrder, &s.IsPublished)
+		rows.Scan(&s.ID, &s.Slug, &s.Title, &s.Summary, &s.Body, &s.Icon, &s.HeroImage, &s.SortOrder, &s.IsPublished)
 		out = append(out, s)
 	}
 	if err := rows.Err(); err != nil {
@@ -1339,28 +1342,41 @@ func (h *AdminHandler) GetServiceAdmin(w http.ResponseWriter, r *http.Request) {
 
 // GET /admin/projects
 func (h *AdminHandler) ListProjectsAdminV2(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.DB.Query(`SELECT id, slug, title, COALESCE(sector,''), COALESCE(location,''), COALESCE(year_completed,0),
-		COALESCE(cover_image,''), is_featured, is_published FROM projects ORDER BY year_completed DESC NULLS LAST, title`)
+	rows, err := h.DB.Query(`SELECT id, slug, title, COALESCE(client_name,''), COALESCE(sector,''), COALESCE(location,''), COALESCE(year_completed,0),
+		COALESCE(scope,''), COALESCE(challenge,''), COALESCE(solution,''), COALESCE(body,''), COALESCE(cover_image,''), gallery, is_featured, is_published FROM projects ORDER BY year_completed DESC NULLS LAST, title`)
 	if err != nil {
 		httpx.Error(w, 500, "SERVER_ERROR", "Failed to list projects", nil)
 		return
 	}
 	defer rows.Close()
 	type row struct {
-		ID            string `json:"id"`
-		Slug          string `json:"slug"`
-		Title         string `json:"title"`
-		Sector        string `json:"sector"`
-		Location      string `json:"location"`
-		YearCompleted int    `json:"year_completed"`
-		CoverImage    string `json:"cover_image"`
-		IsFeatured    bool   `json:"is_featured"`
-		IsPublished   bool   `json:"is_published"`
+		ID            string          `json:"id"`
+		Slug          string          `json:"slug"`
+		Title         string          `json:"title"`
+		ClientName    string          `json:"client_name"`
+		Sector        string          `json:"sector"`
+		Location      string          `json:"location"`
+		YearCompleted int             `json:"year_completed"`
+		Scope         string          `json:"scope"`
+		Challenge     string          `json:"challenge"`
+		Solution      string          `json:"solution"`
+		Body          string          `json:"body"`
+		CoverImage    string          `json:"cover_image"`
+		Gallery       json.RawMessage `json:"gallery"`
+		IsFeatured    bool            `json:"is_featured"`
+		IsPublished   bool            `json:"is_published"`
 	}
 	out := []row{}
 	for rows.Next() {
 		var p row
-		rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Sector, &p.Location, &p.YearCompleted, &p.CoverImage, &p.IsFeatured, &p.IsPublished)
+		var galleryRaw []byte
+		rows.Scan(&p.ID, &p.Slug, &p.Title, &p.ClientName, &p.Sector, &p.Location, &p.YearCompleted,
+			&p.Scope, &p.Challenge, &p.Solution, &p.Body, &p.CoverImage, &galleryRaw, &p.IsFeatured, &p.IsPublished)
+		if len(galleryRaw) > 0 {
+			p.Gallery = galleryRaw
+		} else {
+			p.Gallery = json.RawMessage("[]")
+		}
 		out = append(out, p)
 	}
 	if err := rows.Err(); err != nil {
@@ -1374,31 +1390,38 @@ func (h *AdminHandler) ListProjectsAdminV2(w http.ResponseWriter, r *http.Reques
 func (h *AdminHandler) GetProjectAdmin(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var p struct {
-		ID            string `json:"id"`
-		Slug          string `json:"slug"`
-		Title         string `json:"title"`
-		ClientName    string `json:"client_name"`
-		Sector        string `json:"sector"`
-		Location      string `json:"location"`
-		YearCompleted int    `json:"year_completed"`
-		Scope         string `json:"scope"`
-		Challenge     string `json:"challenge"`
-		Solution      string `json:"solution"`
-		Body          string `json:"body"`
-		CoverImage    string `json:"cover_image"`
-		IsFeatured    bool   `json:"is_featured"`
-		IsPublished   bool   `json:"is_published"`
+		ID            string          `json:"id"`
+		Slug          string          `json:"slug"`
+		Title         string          `json:"title"`
+		ClientName    string          `json:"client_name"`
+		Sector        string          `json:"sector"`
+		Location      string          `json:"location"`
+		YearCompleted int             `json:"year_completed"`
+		Scope         string          `json:"scope"`
+		Challenge     string          `json:"challenge"`
+		Solution      string          `json:"solution"`
+		Body          string          `json:"body"`
+		CoverImage    string          `json:"cover_image"`
+		Gallery       json.RawMessage `json:"gallery"`
+		IsFeatured    bool            `json:"is_featured"`
+		IsPublished   bool            `json:"is_published"`
 	}
+	var galleryRaw []byte
 	err := h.DB.QueryRow(`SELECT id, slug, title, COALESCE(client_name,''), COALESCE(sector,''), COALESCE(location,''), COALESCE(year_completed,0),
-		COALESCE(scope,''), COALESCE(challenge,''), COALESCE(solution,''), COALESCE(body,''), COALESCE(cover_image,''), is_featured, is_published
+		COALESCE(scope,''), COALESCE(challenge,''), COALESCE(solution,''), COALESCE(body,''), COALESCE(cover_image,''), gallery, is_featured, is_published
 		FROM projects WHERE id=$1`, id).Scan(&p.ID, &p.Slug, &p.Title, &p.ClientName, &p.Sector, &p.Location, &p.YearCompleted,
-		&p.Scope, &p.Challenge, &p.Solution, &p.Body, &p.CoverImage, &p.IsFeatured, &p.IsPublished)
+		&p.Scope, &p.Challenge, &p.Solution, &p.Body, &p.CoverImage, &galleryRaw, &p.IsFeatured, &p.IsPublished)
 	if err == sql.ErrNoRows {
 		httpx.Error(w, 404, "NOT_FOUND", "Project not found", nil)
 		return
 	} else if err != nil {
 		httpx.Error(w, 500, "SERVER_ERROR", "Failed to load project", nil)
 		return
+	}
+	if len(galleryRaw) > 0 {
+		p.Gallery = galleryRaw
+	} else {
+		p.Gallery = json.RawMessage("[]")
 	}
 	httpx.JSON(w, 200, p)
 }
@@ -1528,4 +1551,4 @@ func (h *AdminHandler) ChangeMyPassword(w http.ResponseWriter, r *http.Request) 
 	}
 	h.audit(id, "CHANGE_PASSWORD", "user", id)
 	httpx.JSON(w, 200, map[string]string{"status": "password_changed"})
-}
+}

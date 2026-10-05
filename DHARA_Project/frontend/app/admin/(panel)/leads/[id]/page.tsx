@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { adminJSON } from "@/lib/admin-api";
 import { useRoleGuard, AccessDenied } from "@/lib/admin-guard";
 
 const statuses = ["NEW", "CONTACTED", "SITE_VISIT_SCHEDULED", "NEGOTIATING", "CLOSED_WON", "CLOSED_LOST"];
 
-export default function LeadDetailPage({ params }: { params: { id: string } }) {
+export default function LeadDetailPage() {
+  const params = useParams<{ id: string }>(); // Next 15/16: client pages read route params via useParams()
   const guard = useRoleGuard(["SALES_MANAGER", "ADMINISTRATOR"]);
   const [lead, setLead] = useState<any>(null);
   const [notes, setNotes] = useState("");

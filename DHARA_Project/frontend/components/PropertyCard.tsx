@@ -1,17 +1,11 @@
 import Link from "next/link";
-import Image from "next/image";
+import SmartMedia from "@/components/SmartMedia";
 import { PropertySummary } from "@/lib/types";
 import { categoryLabel, listingTypeLabel } from "@/lib/format";
 import PriceTag from "@/components/PriceTag";
 
-const categoryPath: Record<string, string> = {
-  LAND: "lands",
-  HOUSE: "houses",
-  COMMERCIAL: "commercial",
-};
-
 export default function PropertyCard({ property }: { property: PropertySummary }) {
-  const detailHref = `/properties/${categoryPath[property.category] ?? "other"}/${property.slug}`;
+  const detailHref = `/properties/${property.slug}`;
   const keyFacts =
     property.category === "LAND"
       ? property.land_extent_perches
@@ -31,15 +25,12 @@ export default function PropertyCard({ property }: { property: PropertySummary }
       className="group flex h-full flex-col border border-stone-line bg-stone-paper transition-all duration-300 hover:-translate-y-1 hover:border-brass hover:shadow-xl"
     >
       <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-stone-fog">
-        {property.cover_url && (
-          <Image
+        <SmartMedia
             src={property.cover_url}
             alt={property.title}
-            fill
             sizes="(max-width: 768px) 100vw, 33vw"
             className="object-cover transition-transform duration-500 ease-out group-hover:scale-110"
           />
-        )}
         <div className="absolute inset-0 bg-gradient-to-t from-concrete-900/30 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
         <div className="absolute left-3 top-3 flex gap-2">
           <span className="bg-ink px-2 py-1 text-xs font-medium text-stone-paper">
@@ -49,7 +40,7 @@ export default function PropertyCard({ property }: { property: PropertySummary }
             {listingTypeLabel(property.listing_type)}
           </span>
         </div>
-        {property.status !== "PUBLISHED" && (
+        {property.status && property.status !== "PUBLISHED" && (
           <div className="absolute right-3 top-3 bg-concrete-900 px-2 py-1 text-xs text-stone-paper">
             {property.status.replace("_", " ")}
           </div>

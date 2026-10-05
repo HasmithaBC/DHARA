@@ -1,29 +1,24 @@
 # Dhara Construction and Technology — Platform
 
-Development hand-off build for **dharact.com**, against SRS v4.0 (09 Sept 2026):
-**Next.js frontend + Go backend**, PostgreSQL, matching the corporate site, real
-estate listing engine, lead generation and CMS scope in §1.2.
+Next.js website + admin panel, Go REST API, PostgreSQL. Everything an admin saves in the panel is
+read live from the database by the public website — there is no build-time snapshot and no sample
+data standing in for real content. See **CHANGES.md** for what was fixed in this version.
 
-This is a working scaffold, not a finished production system — see the "what's
-implemented" tables in `backend/README.md` and `frontend/README.md` for an
-honest, requirement-by-requirement breakdown of what's built versus stubbed.
-The backend **compiles and passes `go vet`**; the frontend **builds cleanly**
-(`npm run build`, verified in this environment except for the Google Fonts
-fetch, which just needs normal internet access).
-
-## Quick start (Docker)
+## Run with Docker
 
 ```bash
 docker compose up --build
-# frontend: http://localhost:3000
-# backend:  http://localhost:8080/api/v1
-# postgres: localhost:5432 (schema + seed data loaded automatically)
+# website:  http://localhost:3000
+# admin:    http://localhost:3000/admin
+# API:      http://localhost:8080/api/v1
 ```
 
-Default seeded admin login (`/admin`): **admin@dharact.com** / **ChangeMe123!**
-— rotate immediately, this is a dev seed only (NFR-SEC-006).
+The database schema and seed data load automatically the first time (to reload them:
+`docker compose down -v`). Uploaded photos/PDFs live in the `dhara_uploads` volume.
 
-## Quick start (manual)
+Seeded admin login: **admin@dharact.com** / **ChangeMe123!** — change it straight away.
+
+## Run locally (no Docker)
 
 ```bash
 # 1. Database
@@ -31,57 +26,49 @@ createdb dhara
 psql dhara -f backend/migrations/0001_init.sql
 psql dhara -f backend/seed/seed.sql
 
-# 2. Backend
-cd backend && cp .env.example .env && go mod tidy && go run ./cmd/server
+# 2. Backend  (reads backend/.env automatically; listens on :8080)
+cd backend && go run ./cmd/server
 
-# 3. Frontend (new terminal)
-cd frontend && cp .env.example .env.local && npm install && npm run dev
+# 3. Frontend (new terminal; frontend/.env.local points at :8080)
+cd frontend && npm install && npm run dev
 ```
 
-## What you're getting
+Both `backend/.env` and `frontend/.env.local` are included with working local defaults.
+If you change the backend port, change `NEXT_PUBLIC_API_BASE_URL` in `frontend/.env.local` to match.
 
-| Layer | Location | Status |
+## How content gets from the admin to the website
+
+| You edit in the admin… | …and it appears on |
+|---|---|
+| Properties (publish it, ≥3 photos) | `/properties`, category pages, home, property page |
+| Services / Projects | `/services`, `/projects`, home |
+| Testimonials | home |
+| Pages → About / Privacy / Terms | `/about-us`, `/privacy-policy`, `/terms` |
+| Settings → contact, hours, social links | top bar, footer, contact page |
+| Settings → homepage stats, "Why Dhara" | home page |
+| Settings → USD rate | LKR/USD toggle |
+
+A new property starts as a **Draft** (invisible). Add at least 3 photos (each with a description) and
+press **Publish** on its edit page or in the list.
+
+## Configuration that matters
+
+| Variable | Where | Meaning |
 |---|---|---|
-| Database schema (SRS §4, all entities/enums/indexes) | `backend/migrations/0001_init.sql` | ✅ complete |
-| Seed data (Appendix B locations, sample listings, services, projects) | `backend/seed/seed.sql` | ✅ complete |
-| Public REST API (§6.1): catalogue search/filter/sort, detail, leads, documents, newsletter, **live Turnstile verification** | `backend/internal/handlers/public.go` | ✅ complete |
-| Admin REST API (§6.2): property lifecycle, real file upload, leads CRM (with working filtered CSV export and PII erasure), dashboard, content (incl. admin list endpoints for drafts), settings, users, audit log with diffs, RBAC, password reset | `backend/internal/handlers/admin.go`, `content_admin.go`, `auth.go` | ✅ complete |
-| Notifications: real SendGrid email (lead notify + acknowledge, password reset, newsletter opt-in, daily digest) with retry-and-backoff; real WhatsApp Business API call for high-intent leads | `backend/internal/handlers/mailer.go`, `cmd/server/main.go` | ✅ complete — see backend README for the exact env vars each needs |
-| Public site: home, catalogue (6 routes), detail, services, projects, about, contact, legal, 404 | `frontend/app/**` | ✅ complete |
-| **Admin UI**: properties (list/create/edit/lifecycle/media/bulk), leads CRM, content CRUD (now reading the admin list endpoints, so drafts show up), settings, users, audit log | `frontend/app/admin/**` | ✅ complete |
-| SEO: sitemap.xml, robots.txt, JSON-LD structured data | `frontend/app/sitemap.ts`, `robots.ts`, `layout.tsx` | ✅ complete |
-| Currency toggle (LKR/USD), print stylesheet, social share | `frontend/lib/currency-context.tsx`, `components/ShareBar.tsx` | ✅ complete |
-| Blog/Insights (FR-CNT-005, P2) | ⬜ not started — explicitly P2/post-launch in the SRS itself |
-| Malware scanning on uploads (NFR-SEC-007) | 🟡 MIME/extension/size validation is real and enforced; the antivirus-scan piece needs a ClamAV binary or provider-side scan wired in at deploy time — no AV engine is available in this build environment |
-| Gated-document request modal, map view toggle, before/after slider | — | ⬜ backend ready, frontend UI not wired |
+| `NEXT_PUBLIC_API_BASE_URL` | frontend (build time) | API address as seen by the visitor's **browser** |
+| `API_INTERNAL_URL` | frontend (runtime) | API address as seen by the **Next.js server** (Docker: `http://backend:8080/api/v1`) |
+| `ALLOWED_ORIGINS` | backend | Comma-separated website addresses allowed to call the API. **Must include your site's URL** or admin login/saves fail with a CORS error |
+| `SITE_BASE_URL`, `FRONTEND_BASE_URL` | backend | Public URLs of the API and website (used in emailed/signed links) |
+| `USE_FALLBACK_DATA=true` | frontend | Demo mode: show bundled sample content when there is no backend. Off by default |
 
-The backend has no more known correctness gaps against the SRS: the two real bugs
-found during this pass — CSV export ignoring its own filters, and PUBLIC documents
-incorrectly requiring a signed token to download — are both fixed. Every ✅ above
-has been compiled and `go vet`-checked in this environment, not just written.
+For production, set real domains in these variables, a strong `JWT_SECRET` / `SIGNED_URL_SECRET`,
+and serve everything over HTTPS.
 
-This is now a substantially complete hand-off build covering the full SRS data model and API,
-the full public site, and a working (if visually minimal) admin CMS — not just a backend with no
-way to operate it. See `backend/README.md` and `frontend/README.md` for the exhaustive
-requirement-by-requirement breakdown.
-
-## Open items requiring a client decision (SRS Appendix E)
-
-These were flagged in the SRS itself and still need Dhara's sign-off before
-launch — they don't block development but do affect scope:
-
-1. Whether commercial sale listings are in scope for launch, or rent-only.
-2. USD conversion approach — fixed admin-set rate (as scaffolded) vs. live FX feed.
-3. Whether survey plans are published publicly (watermarked) or gated behind a lead form.
-4. Whether exact map pins are permitted by default, or approximate-only until a buyer inquires.
-5. The WhatsApp Business number, and whether the Business API notification (FR-NOT-005) is wanted.
-6. Whether Blog/Insights (FR-CNT-005) is in or out of launch scope.
-7. Legal copy for Privacy Policy and Terms, including lead data-retention period.
-
-## Repository layout
+## Layout
 
 ```
 backend/     Go API — see backend/README.md
-frontend/    Next.js site — see frontend/README.md
+frontend/    Next.js site + admin — see frontend/README.md
 docker-compose.yml
+CHANGES.md
 ```

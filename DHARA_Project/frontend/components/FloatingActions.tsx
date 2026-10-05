@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { IconArrowUp, IconWhatsApp } from "@/components/icons";
 
-const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "94763774551";
 
 /**
  * Site-wide floating action stack — a persistent WhatsApp shortcut (the primary
  * lead channel referenced throughout the site) plus a back-to-top control that
  * only appears once there's somewhere to scroll back to.
  */
-export default function FloatingActions() {
+export default function FloatingActions({ whatsapp = "94763774551" }: { whatsapp?: string }) {
+  const WHATSAPP = whatsapp;
   const [showTop, setShowTop] = useState(false);
 
   useEffect(() => {

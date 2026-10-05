@@ -1,46 +1,10 @@
-import Image from "next/image";
+import { getContact } from "@/lib/contact";
+import SmartMedia from "@/components/SmartMedia";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { fetchProjects, fetchService } from "@/lib/api";
+import { fetchProjects, fetchService, fetchServices } from "@/lib/api";
 import Reveal from "@/components/motion/Reveal";
 import Carousel from "@/components/Carousel";
-import { StaggerGroup, StaggerItem } from "@/components/motion/StaggerGroup";
-
-// Per-service supplementary image galleries mapped to available assets
-const SERVICE_GALLERY: Record<string, string[]> = {
-  "civil-construction": [
-    "/images/services/consulting1.webp",
-    "/images/services/consulting2.webp",
-    "/images/services/consulting3.webp",
-    "/images/services/buildingPlan.webp",
-  ],
-  "tower-foundations": [
-    "/images/services/RoadSafety.webp",
-    "/images/services/geosyntheticalSol (1).webp",
-  ],
-  "architectural-design": [
-    "/images/services/ArchitecturalDesign.webp",
-    "/images/services/buildingPlan.webp",
-  ],
-  "mep": [
-    "/images/services/homenetworking.webp",
-    "/images/services/homenetworking2.webp",
-    "/images/services/AirConditioning.webp",
-  ],
-  "interiors": [
-    "/images/services/flooring.webp",
-    "/images/services/protectiveCoating.webp",
-    "/images/services/S1.png",
-    "/images/services/S2.png",
-  ],
-  "boq-estimation": [
-    "/images/services/BOQ.webp",
-    "/images/services/Estimating.webp",
-  ],
-  "3d-visualization": [
-    "/images/services/3Ddesign.webp",
-  ],
-};
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -58,23 +22,28 @@ const SERVICE_TO_SECTOR: Record<string, string> = {
 };
 
 export default async function ServiceDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const contact = await getContact();
   const { slug } = await params;
-  const service = await fetchService(slug);
+  const [service, allServices] = await Promise.all([
+    fetchService(slug),
+    fetchServices(),
+  ]);
+
   if (!service) notFound();
-  
+
   const sector = SERVICE_TO_SECTOR[slug] || "Residential";
   const relatedProjects = await fetchProjects(sector);
-  const gallery = SERVICE_GALLERY[slug] ?? [];
+  const otherServices = allServices.filter((s) => s.slug !== slug);
 
   // Parse body into paragraphs and bullet list
-  const bodyText = service.body ?? service.summary;
+  const bodyText = service.body?.trim() || service.summary || "";
   const sections = bodyText.split("\n\n");
 
   return (
     <div>
       {/* Hero */}
       <div className="relative aspect-[21/8] w-full overflow-hidden bg-stone-fog">
-        <Image src={service.hero_image} alt={service.title} fill className="object-cover" priority />
+        <SmartMedia src={service.hero_image} alt={service.title} className="object-cover" priority />
         <div className="absolute inset-0 bg-concrete-900/50" />
         <div className="container-content absolute inset-0 flex flex-col justify-end pb-10">
           <p className="eyebrow fade-in-up fade-in-up-1 text-brass-light">Services</p>
@@ -120,27 +89,6 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
               })}
             </div>
           )}
-
-          {/* Gallery */}
-          {gallery.length > 0 && (
-            <div className="mt-10">
-              <p className="eyebrow mb-4">Gallery</p>
-              <StaggerGroup className={`grid gap-4 ${gallery.length >= 3 ? "sm:grid-cols-2 lg:grid-cols-3" : "sm:grid-cols-2"}`}>
-                {gallery.map((img, i) => (
-                  <StaggerItem key={i}>
-                    <div className="relative aspect-[4/3] overflow-hidden bg-stone-fog">
-                      <Image
-                        src={img}
-                        alt={`${service.title} — image ${i + 1}`}
-                        fill
-                        className="object-cover transition-transform duration-500 hover:scale-105"
-                      />
-                    </div>
-                  </StaggerItem>
-                ))}
-              </StaggerGroup>
-            </div>
-          )}
         </div>
 
         {/* Sidebar */}
@@ -155,43 +103,35 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
             </Link>
           </aside>
 
-          <aside className="border border-stone-line bg-stone-paper p-6">
-            <h3 className="font-display text-base text-ink">Other Services</h3>
-            <ul className="mt-3 space-y-2">
-              {[
-                { slug: "civil-construction", label: "Civil Construction" },
-                { slug: "tower-foundations", label: "Tower Foundations" },
-                { slug: "architectural-design", label: "Architectural Design" },
-                { slug: "mep", label: "MEP Systems" },
-                { slug: "interiors", label: "Interiors & Fit-Outs" },
-                { slug: "boq-estimation", label: "BOQ & Cost Auditing" },
-                { slug: "3d-visualization", label: "3D Visualisation" },
-              ]
-                .filter((s) => s.slug !== slug)
-                .map((s) => (
+          {otherServices.length > 0 && (
+            <aside className="border border-stone-line bg-stone-paper p-6">
+              <h3 className="font-display text-base text-ink">Other Services</h3>
+              <ul className="mt-3 space-y-2">
+                {otherServices.map((s) => (
                   <li key={s.slug}>
                     <Link
                       href={`/services/${s.slug}`}
                       className="text-sm text-ink underline decoration-stone-line underline-offset-4 transition-colors hover:text-brass-dark hover:decoration-brass"
                     >
-                      {s.label}
+                      {s.title}
                     </Link>
                   </li>
                 ))}
-            </ul>
-          </aside>
+              </ul>
+            </aside>
+          )}
 
           <aside className="border border-stone-line bg-concrete-900 p-6 text-stone-paper">
             <h3 className="font-display text-base">Contact Us Directly</h3>
-            <p className="mt-2 text-xs text-stone-line">Monday – Saturday, 8:30am – 5:30pm</p>
-            <a href="tel:+94763774551" className="mt-3 block text-sm font-semibold text-brass-light hover:text-brass">
-              +94 76 377 4551
+            <p className="mt-2 text-xs text-stone-line">{contact.hours}</p>
+            <a href={contact.telHref} className="mt-3 block text-sm font-semibold text-brass-light hover:text-brass">
+              {contact.phone}
             </a>
-            <a href="mailto:kosala@dharact.com" className="mt-1 block text-sm text-stone-line hover:text-brass-light">
-              kosala@dharact.com
+            <a href={`mailto:${contact.email}`} className="mt-1 block text-sm text-stone-line hover:text-brass-light">
+              {contact.email}
             </a>
             <a
-              href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "94763774551"}`}
+              href={`https://wa.me/${contact.whatsapp}`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-brass mt-4 inline-flex w-full justify-center"
@@ -214,10 +154,9 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
               items={relatedProjects.map((p) => (
                 <Link key={p.id} href={`/projects/${p.slug}`} className="group flex flex-col h-full">
                   <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-stone-fog">
-                    <Image
+                    <SmartMedia
                       src={p.cover_image}
                       alt={p.title}
-                      fill
                       className="object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                   </div>

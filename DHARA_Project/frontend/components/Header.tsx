@@ -9,29 +9,28 @@ import { clearTokens, getRole } from "@/lib/admin-api";
 import { homeForRole } from "@/lib/admin-guard";
 import { useRouter } from "next/navigation";
 import SignOutModal from "@/components/SignOutModal";
+import type { Service } from "@/lib/types";
 
 const propertyLinks = [
   { href: "/properties?category=LAND", label: "Lands" },
   { href: "/properties?category=HOUSE", label: "Houses" },
   { href: "/properties?category=COMMERCIAL", label: "Commercial" },
-  { href: "/properties?category=OTHER", label: "Other" },
+  { href: "/properties/other", label: "Other" },
 ];
 
-const serviceLinks = [
-  { href: "/services/civil-construction", label: "Civil Construction" },
-  { href: "/services/tower-foundations", label: "Tower Foundations" },
-  { href: "/services/architectural-design", label: "Architectural Design" },
-  { href: "/services/mep", label: "MEP Systems" },
-  { href: "/services/interiors", label: "Interiors & Fit-Outs" },
-  { href: "/services/boq-estimation", label: "BOQ & Cost Auditing" },
-  { href: "/services/3d-visualization", label: "3D Visualisation" },
-];
-
-const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "94763774551";
-
-export default function Header() {
+export default function Header({
+  whatsapp = "94763774551",
+  telHref = "tel:+94763774551",
+  services = [],
+}: {
+  whatsapp?: string;
+  telHref?: string;
+  services?: Pick<Service, "slug" | "title">[];
+}) {
+  const WHATSAPP = whatsapp;
   const router = useRouter();
   const { currency, toggle } = useCurrency();
+  const serviceLinks = services.map((service) => ({ href: `/services/${service.slug}`, label: service.title }));
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const [mobileSection, setMobileSection] = useState<"properties" | "services" | null>(null);
@@ -303,7 +302,7 @@ export default function Header() {
                 </Link>
 
                 <div className="mt-4 flex gap-3">
-                  <a href="tel:+94763774551" className="btn-outline flex-1 justify-center">Call</a>
+                  <a href={telHref} className="btn-outline flex-1 justify-center">Call</a>
                   <a href={`https://wa.me/${WHATSAPP}`} target="_blank" rel="noopener noreferrer" className="btn-brass flex-1 justify-center">
                     WhatsApp
                   </a>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import NewsletterForm from "@/components/NewsletterForm";
 import { fetchSettings } from "@/lib/api";
+import { resolveContact } from "@/lib/contact";
 import {
   IconFacebook,
   IconInstagram,
@@ -30,11 +31,7 @@ const SOCIAL_ICONS: Record<string, (props: { className?: string }) => JSX.Elemen
 
 export default async function Footer() {
   const settings = await fetchSettings();
-  const contact = settings.contact ?? {
-    phone: "+94763774551",
-    email: "kosala@dharact.com",
-    address: "No. 535/1B, Kakunagahalanda Waththa, Heiyanthuduwa, Sri Lanka",
-  };
+  const contact = resolveContact(settings);
   const social = settings.social ?? {};
   const socialLinks = Object.entries(social).filter(([, url]) => !!url);
 
@@ -105,7 +102,7 @@ export default async function Footer() {
             </li>
             <li className="flex items-center gap-2.5">
               <IconPhone className="h-4 w-4 shrink-0 text-brass-light" />
-              <a href={`tel:${contact.phone}`} className="transition-colors hover:text-brass-light">{contact.phone}</a>
+              <a href={contact.telHref} className="transition-colors hover:text-brass-light">{contact.phone}</a>
             </li>
             <li className="flex items-center gap-2.5">
               <IconMail className="h-4 w-4 shrink-0 text-brass-light" />

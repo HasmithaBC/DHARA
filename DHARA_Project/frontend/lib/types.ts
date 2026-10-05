@@ -70,6 +70,8 @@ export interface PropertyDetail extends PropertySummary {
   has_solar?: boolean | null;
   ac_ready?: boolean | null;
   video_url?: string | null;
+  meta_title?: string | null;
+  meta_description?: string | null;
   view_count: number;
   province_name?: string;
   district_name?: string;
@@ -85,9 +87,10 @@ export interface Service {
   title: string;
   summary: string;
   body?: string;
-  icon: string;
+  icon?: string;
   hero_image: string;
   sort_order: number;
+  is_published?: boolean;
 }
 
 export interface Project {
@@ -99,11 +102,15 @@ export interface Project {
   location: string;
   year_completed: number;
   scope?: string;
+  challenge?: string;
+  solution?: string;
   body?: string;
   description?: string;
   cover_image: string;
+  gallery?: string[];
   gallery_images?: string[];
   is_featured: boolean;
+  is_published?: boolean;
 }
 
 export interface Testimonial {

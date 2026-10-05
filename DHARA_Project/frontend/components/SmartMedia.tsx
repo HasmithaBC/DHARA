@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { isUploadedMedia, mediaUrl } from "@/lib/media";
 
 const VIDEO_EXTENSIONS = [".mp4", ".webm", ".mov", ".m4v", ".ogv"];
 
@@ -9,11 +10,12 @@ export function isVideoUrl(url?: string | null): boolean {
 }
 
 /**
- * Drop-in replacement for next/image's <Image fill> pattern that also understands
- * video files. Property and project galleries are just string arrays of file paths —
- * if one of those happens to be a .mp4 (or similar) it was previously being handed to
- * next/image, which silently rendered nothing/a broken image. This renders a muted,
- * looping, inline-playable <video> instead whenever the src looks like a video.
+ * Drop-in replacement for next/image's <Image fill> that
+ *  - understands video files (renders a muted, looping <video>),
+ *  - resolves uploaded "/uploads/..." paths to the API that serves them,
+ *  - skips next/image's optimiser for uploaded files (the Next server may not be able to reach the API),
+ *  - renders a neutral placeholder instead of crashing when no image has been set yet.
+ * The parent element must be positioned (relative) — same requirement as <Image fill>.
  */
 export default function SmartMedia({
   src,
@@ -22,17 +24,23 @@ export default function SmartMedia({
   priority,
   sizes,
 }: {
-  src: string;
+  src?: string | null;
   alt: string;
   className?: string;
   priority?: boolean;
   sizes?: string;
 }) {
-  if (isVideoUrl(src)) {
+  if (!src) {
+    return <div aria-hidden className="absolute inset-0 bg-gradient-to-br from-stone-fog to-stone-line" />;
+  }
+
+  const url = mediaUrl(src);
+
+  if (isVideoUrl(url)) {
     return (
       <video
         className={className}
-        src={src}
+        src={url}
         autoPlay
         muted
         loop
@@ -46,12 +54,13 @@ export default function SmartMedia({
 
   return (
     <Image
-      src={src}
+      src={url}
       alt={alt}
       fill
       priority={priority}
       sizes={sizes}
       className={className}
+      unoptimized={isUploadedMedia(src)}
     />
   );
 }

@@ -2,6 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import Reveal from "@/components/motion/Reveal";
 import { StaggerGroup, StaggerItem } from "@/components/motion/StaggerGroup";
+import RichText from "@/components/RichText";
+import { fetchPage } from "@/lib/api";
 
 export const metadata = {
   title: "About Us",
@@ -70,7 +72,9 @@ const milestones = [
   { year: "2024", event: "120+ projects completed across Sri Lanka" },
 ];
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  // "Our Story" copy is editable in Admin → Pages; the built-in text below is the default.
+  const storyPage = await fetchPage("about-us");
   return (
     <div>
       {/* Hero */}
@@ -90,6 +94,10 @@ export default function AboutPage() {
         <Reveal>
           <p className="eyebrow">Our Story</p>
           <h2 className="mt-2 font-display text-2xl text-ink">Building Sri Lanka, One Project at a Time</h2>
+          {storyPage?.body ? (
+            <RichText text={storyPage.body} className="mt-4" />
+          ) : (
+            <>
           <p className="mt-4 text-sm leading-relaxed text-ink-soft">
             Dhara Construction and Technology (Pvt) Ltd was founded to bridge the gap between civil engineering excellence and
             property development in Sri Lanka. Over 15 years we have grown from a focused civil contractor into a fully
@@ -107,6 +115,8 @@ export default function AboutPage() {
             design and build with the same team that managed the transaction — with a single point of accountability
             from start to handover.
           </p>
+            </>
+          )}
           <div className="mt-6 flex gap-4">
             <Link href="/services" className="btn-primary transition-transform hover:-translate-y-0.5">
               Our Services

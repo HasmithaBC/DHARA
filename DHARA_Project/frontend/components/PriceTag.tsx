@@ -6,12 +6,15 @@ export default function PriceTag({
   priceLkr,
   priceOnRequest,
   priceUnit,
+  displayCurrency,
 }: {
   priceLkr: number | null;
   priceOnRequest: boolean;
   priceUnit?: string | null;
+  displayCurrency?: "LKR" | "USD";
 }) {
-  const { currency, rate } = useCurrency();
+  const { currency: selectedCurrency, rate } = useCurrency();
+  const currency = displayCurrency ?? selectedCurrency;
 
   if (priceOnRequest || priceLkr == null) return <>Price on Request</>;
 

@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { fetchProperties } from "@/lib/api";
 import PropertyCard from "@/components/PropertyCard";
+import FeaturedPropertyCatalog from "@/components/FeaturedPropertyCatalog";
 import { StaggerGroup, StaggerItem } from "@/components/motion/StaggerGroup";
 import MobileFilterSheet from "@/components/MobileFilterSheet";
 
 export interface CatalogueProps {
   title: string;
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Record<string, string | string[] | undefined> | Promise<Record<string, string | string[] | undefined>>;
   forced?: Record<string, string>;
+  showFeatured?: boolean;
 }
 
 const districts = [
@@ -24,10 +26,21 @@ function toQuery(sp: Record<string, string | string[] | undefined>, forced?: Rec
   return { ...q, ...(forced ?? {}) };
 }
 
-export default async function PropertyCatalogue({ title, searchParams, forced }: CatalogueProps) {
-  const params = toQuery(searchParams, forced);
+export default async function PropertyCatalogue({ title, searchParams, forced, showFeatured = false }: CatalogueProps) {
+  // Next.js 15+/16 hands pages `searchParams` as a Promise — always resolve it first.
+  const resolvedSearchParams = await searchParams;
+  const params = toQuery(resolvedSearchParams ?? {}, forced);
   const page = Number(params.page || "1");
-  const result = await fetchProperties({ ...params, page: String(page), per_page: "12" });
+  const [result, featured] = await Promise.all([
+    fetchProperties({ ...params, page: String(page), per_page: "12" }),
+    showFeatured
+      ? fetchProperties({
+          ...Object.fromEntries(Object.entries(params).filter(([k]) => !["page", "per_page", "sort"].includes(k))),
+          featured: "true",
+          per_page: "4",
+        })
+      : Promise.resolve(null),
+  ]);
   const total = result.meta?.total ?? result.data.length;
   const totalPages = result.meta?.total_pages ?? 1;
 
@@ -48,7 +61,7 @@ export default async function PropertyCatalogue({ title, searchParams, forced }:
   const filterForm = (
     <aside className="h-fit border border-stone-line bg-stone-paper p-5 lg:sticky lg:top-24">
       <form method="get" className="space-y-4 text-sm">
-        {!forced?.listing_type && (
+        {!forced?.type && (
           <div>
             <label className="mb-1 block text-xs font-medium text-ink-soft">Listing Type</label>
             <select name="type" defaultValue={params.type || ""} className="w-full border border-stone-line px-2 py-2">
@@ -126,6 +139,16 @@ export default async function PropertyCatalogue({ title, searchParams, forced }:
       </nav>
       <h1 className="mt-3 font-display text-3xl text-ink">{title}</h1>
       <p className="mt-1 text-sm text-ink-soft">{total} properties found</p>
+
+      {featured && (
+        <div className="mt-8">
+          <FeaturedPropertyCatalog
+            properties={featured.data}
+            title="Properties worth a closer look"
+            description="Start with Dhara's featured listings, then refine the full catalogue below."
+          />
+        </div>
+      )}
 
       <div className="mt-8 grid gap-10 lg:grid-cols-[280px_1fr]">
         {/* Filter rail (desktop sticky) / bottom-sheet (mobile) — FR-LST-002, NFR-UI-006 */}

@@ -111,6 +111,14 @@ func (h *AdminHandler) validateProperty(in propertyInput) map[string]string {
 	if in.Latitude < 5.9 || in.Latitude > 9.9 || in.Longitude < 79.5 || in.Longitude > 81.9 {
 		fields["latitude"] = "Coordinates must fall within Sri Lanka"
 	}
+	// Province, district and city must belong together.
+	var locOK bool
+	if err := h.DB.QueryRow(`SELECT EXISTS (
+		SELECT 1 FROM cities c JOIN districts d ON d.id = c.district_id
+		WHERE c.id = $1 AND d.id = $2 AND d.province_id = $3)`,
+		in.CityID, in.DistrictID, in.ProvinceID).Scan(&locOK); err != nil || !locOK {
+		fields["city_id"] = "Choose a province, district and city that belong together"
+	}
 	for k, v := range validateExt(in.propertyExtInput) {
 		fields[k] = v
 	}
@@ -299,12 +307,47 @@ func (h *AdminHandler) UpdateProperty(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, 200, map[string]string{"status": "updated"})
 }
 
-// DELETE /api/v1/admin/properties/{id} — soft-delete via ARCHIVED status.
-func (h *AdminHandler) ArchiveProperty(w http.ResponseWriter, r *http.Request) {
+// DELETE /api/v1/admin/properties/{id} — permanently deletes an archived property.
+func (h *AdminHandler) DeleteProperty(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	h.DB.Exec(`UPDATE properties SET status='ARCHIVED', updated_at=now() WHERE id=$1`, id)
-	h.audit(h.userID(r), "ARCHIVE", "property", id)
-	httpx.JSON(w, 200, map[string]string{"status": "archived"})
+	tx, err := h.DB.Begin()
+	if err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to delete property", nil)
+		return
+	}
+	defer tx.Rollback()
+
+	var status string
+	if err := tx.QueryRow(`SELECT status FROM properties WHERE id=$1 FOR UPDATE`, id).Scan(&status); err != nil {
+		if err == sql.ErrNoRows {
+			httpx.Error(w, 404, "NOT_FOUND", "Property not found", nil)
+		} else {
+			httpx.Error(w, 500, "SERVER_ERROR", "Failed to delete property", nil)
+		}
+		return
+	}
+	if status != "ARCHIVED" {
+		httpx.Error(w, 409, "ARCHIVE_REQUIRED", "Archive the property before permanently deleting it", nil)
+		return
+	}
+	if _, err := tx.Exec(`UPDATE leads SET property_id=NULL WHERE property_id=$1`, id); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to delete property", nil)
+		return
+	}
+	if _, err := tx.Exec(`UPDATE testimonials SET related_property_id=NULL WHERE related_property_id=$1`, id); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to delete property", nil)
+		return
+	}
+	if _, err := tx.Exec(`DELETE FROM properties WHERE id=$1`, id); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to delete property", nil)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to delete property", nil)
+		return
+	}
+	h.audit(h.userID(r), "DELETE", "property", id)
+	httpx.JSON(w, 200, map[string]string{"status": "deleted"})
 }
 
 // validTransitions implements the §4.3 lifecycle state machine.
@@ -314,7 +357,7 @@ var validTransitions = map[string][]string{
 	"RESERVED":  {"PUBLISHED", "SOLD", "RENTED"},
 	"SOLD":      {"ARCHIVED"},
 	"RENTED":    {"ARCHIVED"},
-	"ARCHIVED":  {},
+	"ARCHIVED":  {"PUBLISHED"},
 }
 
 // POST /api/v1/admin/properties/{id}/status — enforces valid transitions only.
@@ -358,6 +401,7 @@ func (h *AdminHandler) TransitionStatus(w http.ResponseWriter, r *http.Request) 
 			httpx.Error(w, 400, "VALIDATION_ERROR", "Every image needs alt text before publishing", nil)
 			return
 		}
+		h.ensureCover(id)
 		h.DB.Exec(`UPDATE properties SET status=$1, published_at=COALESCE(published_at, now()), updated_at=now() WHERE id=$2`, req.Status, id)
 	} else {
 		h.DB.Exec(`UPDATE properties SET status=$1, updated_at=now() WHERE id=$2`, req.Status, id)
@@ -368,21 +412,49 @@ func (h *AdminHandler) TransitionStatus(w http.ResponseWriter, r *http.Request) 
 }
 
 // POST /api/v1/admin/properties/{id}/duplicate — FR-ADM-003 duplicate-listing.
+// Copies every detail (price, specs, location, legal, SEO) and the amenity links into a new DRAFT with
+// a fresh reference code. Photos and documents are not copied: they are per-listing.
 func (h *AdminHandler) DuplicateProperty(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	uid := h.userID(r)
-	var newID, category, title string
+
+	var category, listingType string
+	if err := h.DB.QueryRow(`SELECT category, listing_type FROM properties WHERE id=$1`, id).Scan(&category, &listingType); err != nil {
+		httpx.Error(w, 404, "NOT_FOUND", "Property not found", nil)
+		return
+	}
+	var seq int
+	h.DB.QueryRow(`SELECT count(*)+1 FROM properties WHERE category=$1`, category).Scan(&seq)
+	refCode := util.NextReferenceCode(category, seq, listingType == "RENT")
+
+	var newID string
 	err := h.DB.QueryRow(`
-		INSERT INTO properties (reference_code, title, slug, category, listing_type, status, short_description,
-			description, province_id, district_id, city_id, latitude, longitude, created_by, updated_by)
-		SELECT reference_code || '-COPY', title || ' (Copy)', slug || '-copy-' || substr(md5(random()::text),1,6),
-			category, listing_type, 'DRAFT', short_description, description, province_id, district_id, city_id,
-			latitude, longitude, $2, $2
-		FROM properties WHERE id=$1 RETURNING id, category, title`, id, uid).Scan(&newID, &category, &title)
+		INSERT INTO properties (
+			reference_code, title, slug, category, listing_type, status, is_featured,
+			short_description, description, price_lkr, price_on_request, price_unit, is_negotiable,
+			rent_period, minimum_lease_months, advance_months, deposit_lkr,
+			province_id, district_id, city_id, address_line, show_exact_location, latitude, longitude,
+			land_extent_perches, land_shape, road_access_ft, road_surface, frontage_ft, land_type,
+			built_area_sqft, bedrooms, bathrooms, floors, parking_spaces, year_built, furnishing, condition,
+			has_electricity, water_source, deed_type, deed_note, has_boundary_wall, has_solar, ac_ready,
+			video_url, meta_title, meta_description, created_by, updated_by
+		)
+		SELECT $2::varchar, title || ' (Copy)', slug || '-copy-' || substr(md5(random()::text),1,6), category, listing_type, 'DRAFT', false,
+			short_description, description, price_lkr, price_on_request, price_unit, is_negotiable,
+			rent_period, minimum_lease_months, advance_months, deposit_lkr,
+			province_id, district_id, city_id, address_line, show_exact_location, latitude, longitude,
+			land_extent_perches, land_shape, road_access_ft, road_surface, frontage_ft, land_type,
+			built_area_sqft, bedrooms, bathrooms, floors, parking_spaces, year_built, furnishing, condition,
+			has_electricity, water_source, deed_type, deed_note, has_boundary_wall, has_solar, ac_ready,
+			video_url, meta_title, meta_description, $3::uuid, $3::uuid
+		FROM properties WHERE id=$1
+		RETURNING id`, id, refCode, uid).Scan(&newID)
 	if err != nil {
 		httpx.Error(w, 500, "SERVER_ERROR", "Failed to duplicate property", nil)
 		return
 	}
+	h.DB.Exec(`INSERT INTO property_amenities (property_id, amenity_id)
+		SELECT $1::uuid, amenity_id FROM property_amenities WHERE property_id=$2 ON CONFLICT DO NOTHING`, newID, id)
 	h.audit(uid, "DUPLICATE", "property", newID)
 	httpx.JSON(w, 201, map[string]string{"id": newID})
 }
@@ -494,7 +566,11 @@ func (h *AdminHandler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 500, "SERVER_ERROR", "Failed to prepare upload storage", nil)
 		return
 	}
-	safeName := fmt.Sprintf("%s-%d%s", propertyID, time.Now().UnixNano(), ext)
+	prefix := propertyID
+	if prefix == "" {
+		prefix = "media"
+	}
+	safeName := fmt.Sprintf("%s-%d%s", prefix, time.Now().UnixNano(), ext)
 	destPath := filepath.Join(h.Cfg.MediaUploadDir, safeName)
 
 	dest, err := os.Create(destPath)
@@ -518,8 +594,59 @@ func (h *AdminHandler) UploadMedia(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminHandler) DeleteImage(w http.ResponseWriter, r *http.Request) {
+	propertyID := chi.URLParam(r, "id")
 	imageID := chi.URLParam(r, "imageId")
-	h.DB.Exec(`DELETE FROM property_images WHERE id=$1`, imageID)
+	tx, err := h.DB.BeginTx(r.Context(), nil)
+	if err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to remove photo", nil)
+		return
+	}
+	defer tx.Rollback()
+
+	var wasCover bool
+	err = tx.QueryRowContext(r.Context(), `
+		SELECT is_cover OR EXISTS (
+			SELECT 1 FROM properties WHERE id=$2 AND cover_image_id=$1
+		) FROM property_images WHERE id=$1 AND property_id=$2 FOR UPDATE`, imageID, propertyID).Scan(&wasCover)
+	if err == sql.ErrNoRows {
+		httpx.Error(w, 404, "NOT_FOUND", "Photo not found", nil)
+		return
+	}
+	if err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to remove photo", nil)
+		return
+	}
+	if _, err = tx.ExecContext(r.Context(), `UPDATE properties SET cover_image_id=NULL WHERE id=$1 AND cover_image_id=$2`, propertyID, imageID); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to remove photo", nil)
+		return
+	}
+	if _, err = tx.ExecContext(r.Context(), `DELETE FROM property_images WHERE id=$1 AND property_id=$2`, imageID, propertyID); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to remove photo", nil)
+		return
+	}
+	if wasCover {
+		var nextCoverID string
+		err = tx.QueryRowContext(r.Context(), `SELECT id FROM property_images WHERE property_id=$1 ORDER BY sort_order, id LIMIT 1`, propertyID).Scan(&nextCoverID)
+		if err != nil && err != sql.ErrNoRows {
+			httpx.Error(w, 500, "SERVER_ERROR", "Failed to update cover photo", nil)
+			return
+		}
+		if err == nil {
+			if _, err = tx.ExecContext(r.Context(), `UPDATE property_images SET is_cover=(id=$2) WHERE property_id=$1`, propertyID, nextCoverID); err != nil {
+				httpx.Error(w, 500, "SERVER_ERROR", "Failed to update cover photo", nil)
+				return
+			}
+			if _, err = tx.ExecContext(r.Context(), `UPDATE properties SET cover_image_id=$1, updated_at=now() WHERE id=$2`, nextCoverID, propertyID); err != nil {
+				httpx.Error(w, 500, "SERVER_ERROR", "Failed to update cover photo", nil)
+				return
+			}
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		httpx.Error(w, 500, "SERVER_ERROR", "Failed to remove photo", nil)
+		return
+	}
+	h.audit(h.userID(r), "DELETE_IMAGE", "property", propertyID)
 	httpx.JSON(w, 200, map[string]string{"status": "deleted"})
 }
 
@@ -885,5 +1012,48 @@ func mustJSON(v interface{}) string {
 	default:
 		b, _ := json.Marshal(v)
 		return string(b)
+	}
+}
+
+// POST /admin/cities — lets staff add a town that is not in the seed list yet, so a property can
+// be listed anywhere in Sri Lanka. Returns the existing city if that name is already present.
+func (h *AdminHandler) CreateCity(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		DistrictID int    `json:"district_id"`
+		Name       string `json:"name"`
+	}
+	if err := decodeJSON(r, &in); err != nil {
+		httpx.Error(w, 400, "VALIDATION_ERROR", "Invalid request body", nil)
+		return
+	}
+	name := strings.TrimSpace(in.Name)
+	if in.DistrictID <= 0 || len(name) < 2 || len(name) > 80 {
+		httpx.Error(w, 400, "VALIDATION_ERROR", "Choose a district and enter a town name (2-80 characters)", nil)
+		return
+	}
+	var id int
+	err := h.DB.QueryRow(`SELECT id FROM cities WHERE district_id=$1 AND lower(name)=lower($2)`, in.DistrictID, name).Scan(&id)
+	if err == sql.ErrNoRows {
+		err = h.DB.QueryRow(`INSERT INTO cities (district_id, name) VALUES ($1,$2) RETURNING id`, in.DistrictID, name).Scan(&id)
+	}
+	if err != nil {
+		httpx.Error(w, 400, "VALIDATION_ERROR", "Could not add that town (check the district)", nil)
+		return
+	}
+	h.audit(h.userID(r), "CREATE", "city", strconv.Itoa(id))
+	httpx.JSON(w, 201, map[string]interface{}{"id": id, "name": name})
+}
+
+// ensureCover makes sure a property that has images also has one flagged as its cover: public
+// cards only display the image marked is_cover.
+func (h *AdminHandler) ensureCover(id string) {
+	var coverCount int
+	h.DB.QueryRow(`SELECT count(*) FROM property_images WHERE property_id=$1 AND is_cover`, id).Scan(&coverCount)
+	if coverCount > 0 {
+		return
+	}
+	var firstImg string
+	if err := h.DB.QueryRow(`SELECT id FROM property_images WHERE property_id=$1 ORDER BY sort_order, id LIMIT 1`, id).Scan(&firstImg); err == nil {
+		h.setCover(id, firstImg)
 	}
 }

@@ -1,4 +1,5 @@
 import Image from "next/image";
+import SmartMedia from "@/components/SmartMedia";
 import Link from "next/link";
 import { fetchProjects } from "@/lib/api";
 import Reveal from "@/components/motion/Reveal";
@@ -59,10 +60,9 @@ export default async function ProjectsPage(props: { searchParams: Promise<{ sect
               <StaggerItem key={p.id}>
                 <Link href={`/projects/${p.slug}`} className="group block">
                   <div className="relative aspect-[4/3] overflow-hidden bg-stone-fog">
-                    <Image
+                    <SmartMedia
                       src={p.cover_image}
                       alt={p.title}
-                      fill
                       className="object-cover transition-transform duration-500 group-hover:scale-110"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-concrete-900/60 via-concrete-900/0 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />

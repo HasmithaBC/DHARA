@@ -85,3 +85,40 @@ export function mapEmbedSrc(property: {
     ? `https://www.google.com/maps/embed/v1/place?key=${key}&q=${areaQuery}&zoom=12`
     : `https://www.google.com/maps?q=${areaQuery}&z=12&output=embed`;
 }
+
+/** "SEMI_FURNISHED" -> "Semi Furnished", "CLEAR_DEED" -> "Clear Deed". */
+export function prettyEnum(v?: string | null): string | undefined {
+  if (!v) return undefined;
+  return v
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Turns a YouTube / Vimeo page link into an embeddable player URL, or null for anything else. */
+export function videoEmbedUrl(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url.trim());
+    const host = u.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") {
+      const id = u.pathname.slice(1).split("/")[0];
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+    if (host === "youtube.com" || host === "m.youtube.com") {
+      if (u.pathname === "/watch") {
+        const id = u.searchParams.get("v");
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+      const m = u.pathname.match(/^\/(?:embed|shorts|live)\/([\w-]+)/);
+      return m ? `https://www.youtube.com/embed/${m[1]}` : null;
+    }
+    if (host === "vimeo.com" || host === "player.vimeo.com") {
+      const m = u.pathname.match(/(\d+)/);
+      return m ? `https://player.vimeo.com/video/${m[1]}` : null;
+    }
+  } catch {
+    // not a valid URL
+  }
+  return null;
+}

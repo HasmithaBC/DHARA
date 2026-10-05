@@ -2,73 +2,111 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchProperty, fetchSimilarProperties } from "@/lib/api";
 import SmartMedia from "@/components/SmartMedia";
-import { formatListingPrice, landExtentDisplay, whatsappInquiryLink, mapEmbedSrc } from "@/lib/format";
+import {
+  formatListingPrice,
+  landExtentDisplay,
+  listingTypeLabel,
+  mapEmbedSrc,
+  prettyEnum,
+  videoEmbedUrl,
+  whatsappInquiryLink,
+} from "@/lib/format";
+import { SITE_URL, propertyPath } from "@/lib/config";
+import { getContact } from "@/lib/contact";
+import { mediaUrl } from "@/lib/media";
 import PropertyCard from "@/components/PropertyCard";
 import InquiryPanel from "@/components/InquiryPanel";
 import ShareBar from "@/components/ShareBar";
 import PriceTag from "@/components/PriceTag";
 import DocumentsList from "@/components/DocumentsList";
 
+type Row = [string, string | undefined | null];
+
+// The API leaves a field out entirely when it was never filled in. Treat "missing" as "unknown" (hidden),
+// never as "No" / "Not available".
+const yesNo = (v?: boolean | null) => (v === null || v === undefined ? undefined : v ? "Yes" : "No");
+const availability = (v?: boolean | null) => (v === null || v === undefined ? undefined : v ? "Available" : "Not available");
+const num = (v?: number | null) => (v === null || v === undefined ? undefined : v.toLocaleString());
+
 export default async function PropertyDetailView({ slug }: { slug: string }) {
-  const property = await fetchProperty(slug);
+  const [property, contact] = await Promise.all([fetchProperty(slug), getContact()]);
   if (!property) notFound();
 
   const similar = await fetchSimilarProperties(property.id);
   const price = formatListingPrice(property);
-  const whatsapp = whatsappInquiryLink(
-    process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "94763774551",
-    property.reference_code,
-    property.title,
-    price,
-    `https://dharact.com/properties/${property.category.toLowerCase()}/${property.slug}`
-  );
+  const pageUrl = `${SITE_URL}${propertyPath(property.slug)}`;
+  const whatsapp = whatsappInquiryLink(contact.whatsapp, property.reference_code, property.title, price, pageUrl);
 
-  const specRows: [string, string | undefined | null][] =
+  // Cover photo first (the admin's "cover" choice), then the rest in the admin's order.
+  const images = [...(property.images ?? [])].sort((a, b) => Number(b.is_cover) - Number(a.is_cover));
+  const location = [property.city_name, property.district_name, property.province_name].filter(Boolean).join(", ");
+  const embed = videoEmbedUrl(property.video_url);
+  const isRent = property.listing_type === "RENT";
+
+  const specRows: Row[] =
     property.category === "LAND"
       ? [
           ["Extent", property.land_extent_perches ? landExtentDisplay(property.land_extent_perches) : undefined],
-          ["Land Type", property.land_type ?? undefined],
-          ["Shape", property.land_shape ?? undefined],
+          ["Land Type", prettyEnum(property.land_type)],
+          ["Shape", property.land_shape],
+          ["Frontage", property.frontage_ft ? `${property.frontage_ft} ft` : undefined],
           ["Road Access", property.road_access_ft ? `${property.road_access_ft} ft` : undefined],
-          ["Road Surface", property.road_surface ?? undefined],
-          ["Deed Type", property.deed_type?.replace("_", " ") ?? undefined],
-          ["Electricity", property.has_electricity === null ? undefined : property.has_electricity ? "Available" : "Not available"],
-          ["Water Source", property.water_source ?? undefined],
+          ["Road Surface", prettyEnum(property.road_surface)],
+          ["Deed Type", prettyEnum(property.deed_type)],
+          ["Electricity", availability(property.has_electricity)],
+          ["Water Source", prettyEnum(property.water_source)],
+          ["Boundary Wall", yesNo(property.has_boundary_wall)],
         ]
       : [
           ["Built Area", property.built_area_sqft ? `${property.built_area_sqft.toLocaleString()} sq ft` : undefined],
-          ["Bedrooms", property.bedrooms?.toString()],
-          ["Bathrooms", property.bathrooms?.toString()],
-          ["Floors", property.floors?.toString()],
-          ["Parking", property.parking_spaces?.toString()],
+          ["Land Extent", property.land_extent_perches ? landExtentDisplay(property.land_extent_perches) : undefined],
+          ["Bedrooms", num(property.bedrooms)],
+          ["Bathrooms", num(property.bathrooms)],
+          ["Floors", num(property.floors)],
+          ["Parking", num(property.parking_spaces)],
           ["Year Built", property.year_built?.toString()],
-          ["Furnishing", property.furnishing?.replace("_", " ")],
-          ["Condition", property.condition?.replace("_", " ")],
-          ["Deed Type", property.deed_type?.replace("_", " ")],
+          ["Furnishing", prettyEnum(property.furnishing)],
+          ["Condition", prettyEnum(property.condition)],
+          ["Electricity", availability(property.has_electricity)],
+          ["Water Source", prettyEnum(property.water_source)],
+          ["Boundary Wall", yesNo(property.has_boundary_wall)],
+          ["Solar Power", yesNo(property.has_solar)],
+          ["A/C Ready", yesNo(property.ac_ready)],
+          ["Deed Type", prettyEnum(property.deed_type)],
         ];
 
-  // FRPRP-012 / NFRSEO-004: RealEstateListing + BreadcrumbList structured data.
+  // FR-PRP-012 / NFR-SEO-004: RealEstateListing + BreadcrumbList structured data.
+  const cover = images[0]?.url ? mediaUrl(images[0].url) : "";
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "RealEstateListing",
     name: property.title,
     description: property.short_description,
-    url: `https://dharact.com/properties/${property.category.toLowerCase()}/${property.slug}`,
-    image: property.images?.[0]?.url ? [`https://dharact.com${property.images[0].url}`] : undefined,
+    url: pageUrl,
+    image: cover ? [cover.startsWith("http") ? cover : `${SITE_URL}${cover}`] : undefined,
     address: { "@type": "PostalAddress", addressLocality: property.city_name, addressRegion: property.district_name, addressCountry: "LK" },
     offers: property.price_lkr
-      ? { "@type": "Offer", price: property.price_lkr, priceCurrency: "LKR", availability: "https://schema.org/InStock" }
+      ? {
+          "@type": "Offer",
+          price: property.price_lkr,
+          priceCurrency: "LKR",
+          availability:
+            property.status === "SOLD" || property.status === "RENTED" ? "https://schema.org/SoldOut" : "https://schema.org/InStock",
+        }
       : undefined,
   };
   const breadcrumbLd = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Home", item: "https://dharact.com" },
-      { "@type": "ListItem", position: 2, name: "Properties", item: "https://dharact.com/properties" },
+      { "@type": "ListItem", position: 1, name: "Home", item: SITE_URL },
+      { "@type": "ListItem", position: 2, name: "Properties", item: `${SITE_URL}/properties` },
       { "@type": "ListItem", position: 3, name: property.title },
     ],
   };
+
+  // PUBLISHED listings show "For Sale"/"For Rent"; Reserved / Sold / Rented are called out as such.
+  const badge = property.status === "PUBLISHED" ? listingTypeLabel(property.listing_type) : prettyEnum(property.status);
 
   return (
     <div className="container-content py-10 print:py-0">
@@ -84,16 +122,12 @@ export default async function PropertyDetailView({ slug }: { slug: string }) {
         <div>
           {/* Gallery — FR-PRP-002 */}
           <div className="relative aspect-[16/10] w-full overflow-hidden bg-stone-fog">
-            {property.images?.[0] && (
-              <SmartMedia src={property.images[0].url} alt={property.images[0].alt_text} className="object-cover" priority />
-            )}
-            <span className="absolute left-3 top-3 bg-ink px-2 py-1 text-xs text-stone-paper">
-              {property.status.replace("_", " ")}
-            </span>
+            {images[0] && <SmartMedia src={images[0].url} alt={images[0].alt_text} className="object-cover" priority />}
+            <span className="absolute left-3 top-3 bg-ink px-2 py-1 text-xs text-stone-paper">{badge}</span>
           </div>
-          {property.images && property.images.length > 1 && (
+          {images.length > 1 && (
             <div className="mt-2 grid grid-cols-4 gap-2">
-              {property.images.slice(1, 5).map((img) => (
+              {images.slice(1).map((img) => (
                 <div key={img.id} className="relative aspect-[4/3] overflow-hidden bg-stone-fog">
                   <SmartMedia src={img.url} alt={img.alt_text} className="object-cover" />
                 </div>
@@ -103,21 +137,24 @@ export default async function PropertyDetailView({ slug }: { slug: string }) {
 
           {/* Header block — FR-PRP-003 */}
           <div className="mt-8 border-b border-stone-line pb-6">
-            <div className="text-xs text-ink-soft">{property.city_name}, {property.district_name}, {property.province_name}</div>
+            <div className="text-xs text-ink-soft">{location}</div>
+            {property.address_line && <div className="mt-0.5 text-xs text-ink-soft">{property.address_line}</div>}
             <h1 className="mt-1 font-display text-3xl text-ink">{property.title}</h1>
+            {property.short_description && <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink-soft">{property.short_description}</p>}
             <div className="mt-2 text-xs text-ink-soft">Ref: {property.reference_code}</div>
             <div className="mt-4 font-display text-2xl text-brass-dark">
-              <PriceTag priceLkr={property.price_lkr} priceOnRequest={property.price_on_request} priceUnit={property.price_unit} />
+              <PriceTag priceLkr={property.price_lkr} priceOnRequest={property.price_on_request} priceUnit={property.price_unit} displayCurrency="LKR" />
             </div>
             {property.is_negotiable && <div className="text-xs text-ink-soft">Negotiable</div>}
-            {property.listing_type === "RENT" && (
+            {isRent && (
               <div className="mt-2 text-sm text-ink-soft">
                 {property.rent_period === "ANNUAL" ? "Annual" : "Monthly"} rent
+                {property.minimum_lease_months ? ` · Minimum lease ${property.minimum_lease_months} months` : ""}
                 {property.advance_months ? ` · ${property.advance_months} months advance` : ""}
                 {property.deposit_lkr ? ` · Deposit LKR ${property.deposit_lkr.toLocaleString()}` : ""}
               </div>
             )}
-            <ShareBar url={`https://dharact.com/properties/${property.category.toLowerCase()}/${property.slug}`} title={property.title} />
+            <ShareBar url={pageUrl} title={property.title} />
           </div>
 
           {/* Specifications — FR-PRP-004/005 */}
@@ -139,6 +176,7 @@ export default async function PropertyDetailView({ slug }: { slug: string }) {
           <div className="mt-8">
             <h2 className="font-display text-lg text-ink">Description</h2>
             <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-ink-soft">{property.description}</p>
+            {property.deed_note && <p className="mt-3 text-xs text-ink-soft italic">Deed Note: {property.deed_note}</p>}
           </div>
 
           {/* Amenities — FR-PRP-006 */}
@@ -153,12 +191,33 @@ export default async function PropertyDetailView({ slug }: { slug: string }) {
             </div>
           )}
 
+          {/* Video tour (admin → Property → Video URL) */}
+          {property.video_url && (
+            <div className="mt-8 print:hidden">
+              <h2 className="font-display text-lg text-ink">Video Tour</h2>
+              {embed ? (
+                <div className="mt-3 aspect-video w-full overflow-hidden border border-stone-line bg-stone-fog">
+                  <iframe
+                    title="Property video tour"
+                    className="h-full w-full"
+                    src={embed}
+                    loading="lazy"
+                    allow="accelerometer; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <a href={property.video_url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm underline">
+                  Watch the video tour
+                </a>
+              )}
+            </div>
+          )}
+
           {/* Downloads — FR-PRP-007 / FR-INQ-005 */}
           <DocumentsList documents={property.documents ?? []} />
 
-          {/* Location map — FR-PRP-008. Uses Google's keyless "output=embed" iframe by
-              default so the site works with zero configuration; if NEXT_PUBLIC_GOOGLE_MAPS_KEY
-              is set, upgrade to the full Maps Embed API (nicer styling, still no client JS). */}
+          {/* Location map — FR-PRP-008 */}
           <div className="mt-8">
             <h2 className="font-display text-lg text-ink">Location</h2>
             <div className="mt-3 aspect-[16/7] w-full overflow-hidden border border-stone-line bg-stone-fog">
@@ -201,7 +260,7 @@ export default async function PropertyDetailView({ slug }: { slug: string }) {
 
         {/* Sticky inquiry panel — FR-PRP-009 */}
         <div className="print:hidden">
-          <InquiryPanel property={property} price={price} whatsappLink={whatsapp} />
+          <InquiryPanel property={property} price={price} whatsappLink={whatsapp} telHref={contact.telHref} />
         </div>
       </div>
     </div>

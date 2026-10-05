@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
+import { PUBLIC_API_BASE as API_BASE } from "./config";
 
 type Currency = "LKR" | "USD";
 
@@ -12,7 +13,6 @@ interface CurrencyState {
 
 const CurrencyContext = createContext<CurrencyState>({ currency: "LKR", rate: 300, toggle: () => {} });
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080/api/v1";
 
 export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const [currency, setCurrency] = useState<Currency>("LKR");
@@ -22,7 +22,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     const stored = document.cookie.split("; ").find((c) => c.startsWith("dhara_currency="));
     if (stored?.split("=")[1] === "USD") setCurrency("USD");
 
-    fetch(`${API_BASE}/settings/public`)
+    fetch(`${API_BASE}/settings/public`, { cache: "no-store" })
       .then((r) => r.json())
       .then((body) => {
         // /settings/public returns the settings map directly (no {data} envelope).
