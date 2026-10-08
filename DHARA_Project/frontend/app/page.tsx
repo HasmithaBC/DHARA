@@ -228,22 +228,42 @@ export default async function HomePage() {
             <p className="eyebrow text-brass-light">Client Voices</p>
             <h2 className="mt-2 font-display text-2xl text-stone-paper">What Our Clients Say</h2>
           </Reveal>
-          <StaggerGroup className="mt-8 grid gap-6 md:grid-cols-3">
-            {testimonials.slice(0, 3).map((t) => (
-              <StaggerItem key={t.id}>
-                <blockquote className="relative h-full border border-white/10 bg-white/5 p-6 backdrop-blur-sm transition-colors hover:border-brass/60">
-                  <IconQuote className="h-6 w-6 text-brass" />
-                  <p className="mt-3 text-sm leading-relaxed text-stone-line">{t.quote}</p>
-                  <div className="mt-4 flex gap-0.5">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <IconStar key={i} className="h-3.5 w-3.5 text-brass-light" />
-                    ))}
+          <div className="mt-12 flex overflow-hidden">
+            <div className="flex w-max animate-marquee hover:[animation-play-state:paused]">
+              <div className="flex gap-6 pr-6">
+                {testimonials.map((t) => (
+                  <div key={`t1-${t.id}`} className="w-[350px] shrink-0 sm:w-[450px]">
+                    <blockquote className="relative h-full border border-white/10 bg-white/5 p-6 backdrop-blur-sm transition-colors hover:border-brass/60">
+                      <IconQuote className="h-6 w-6 text-brass" />
+                      <p className="mt-3 text-sm leading-relaxed text-stone-line">{t.quote}</p>
+                      <div className="mt-4 flex gap-0.5">
+                        {Array.from({ length: t.rating || 5 }).map((_, i) => (
+                          <IconStar key={i} className="h-3.5 w-3.5 text-brass-light" />
+                        ))}
+                      </div>
+                      <footer className="mt-3 text-xs text-brass-light">{t.author_name} — {t.author_location}</footer>
+                    </blockquote>
                   </div>
-                  <footer className="mt-3 text-xs text-brass-light">{t.author_name} — {t.author_location}</footer>
-                </blockquote>
-              </StaggerItem>
-            ))}
-          </StaggerGroup>
+                ))}
+              </div>
+              <div className="flex gap-6 pr-6">
+                {testimonials.map((t) => (
+                  <div key={`t2-${t.id}`} className="w-[350px] shrink-0 sm:w-[450px]">
+                    <blockquote className="relative h-full border border-white/10 bg-white/5 p-6 backdrop-blur-sm transition-colors hover:border-brass/60">
+                      <IconQuote className="h-6 w-6 text-brass" />
+                      <p className="mt-3 text-sm leading-relaxed text-stone-line">{t.quote}</p>
+                      <div className="mt-4 flex gap-0.5">
+                        {Array.from({ length: t.rating || 5 }).map((_, i) => (
+                          <IconStar key={i} className="h-3.5 w-3.5 text-brass-light" />
+                        ))}
+                      </div>
+                      <footer className="mt-3 text-xs text-brass-light">{t.author_name} — {t.author_location}</footer>
+                    </blockquote>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

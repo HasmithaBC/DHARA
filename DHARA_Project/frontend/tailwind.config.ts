@@ -34,6 +34,15 @@ const config: Config = {
       maxWidth: {
         content: "1280px",
       },
+      keyframes: {
+        marquee: {
+          '0%': { transform: 'translateX(-50%)' },
+          '100%': { transform: 'translateX(0%)' },
+        },
+      },
+      animation: {
+        marquee: 'marquee 30s linear infinite',
+      },
     },
   },
   plugins: [],
